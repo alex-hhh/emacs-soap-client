@@ -150,10 +150,10 @@ emacs-lisp"
   (car (jira2-call "addComment" key `((body . ,comment)))))
 
 (defun jira2-update-issue (key fields)
-  (jira2-call "updateIssue" key (jira2-make-remote-field-values fields)))
+  (car (jira2-call "updateIssue" key (jira2-make-remote-field-values fields))))
 
 (defun jira2-create-issue (fields)
-  (jira2-call "createIssue" fields))
+  (car (jira2-call "createIssue" fields)))
 
 (defvar jira2-status-codes-cache nil)
 
