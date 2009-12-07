@@ -1,0 +1,6 @@
+2009-12-07  Alex Harsanyi  <AlexHarsanyi@gmail.com>
+
+	* soap-client.el (soap-encode-basic-type): use
+	`url-insert-entities-in-string` when inserting the user data into
+	the message
+

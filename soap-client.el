@@ -24,6 +24,7 @@
 (require 'xml)
 (require 'warnings)
 (require 'url-http)
+(require 'url-util)
 
 (defsubst soap-warning (message &rest args)
   (display-warning 'soap-client (apply 'format message args) :warning))
@@ -772,7 +773,7 @@ This is because it is easier to work with list results in LISP."
           (cond ((eq (soap-basic-type-kind type) 'boolean)
                  (insert (if value "true" "false")))
                 (t
-                 (insert (format "%s" value)))))
+                 (insert (url-insert-entities-in-string (format "%s" value))))))
         (insert " xsi:nil=\"true\">"))
     (insert "</" xml-tag ">\n")))
 
