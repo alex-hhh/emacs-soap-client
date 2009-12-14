@@ -46,7 +46,9 @@ tipically:
   http://YOUR_INSTALLATION/rpc/soap/jirasoapservice-v2?wsdl
 
 The default value works if JIRA is located at a hostname named
-'jira'.")
+'jira'."
+  :type 'string
+  :group 'jira2)
 
 (defvar jira2-token nil
   "JIRA token used for authentication")
