@@ -229,4 +229,30 @@ where KEY is a project key and NUMBER is the issue number."
       (setq jira2-issue-regexp (concat "\\<" (regexp-opt projects) "-[0-9]+\\>"))))
   jira2-issue-regexp)
 
+(defun jira2-do-jql-search (jql &optional limit)
+  "Run a JQL query and return the list of issues that matched.
+LIMIT is the maximum number of queries to return.  Note that JIRA
+has an internal limit of how many queries to return, as such, it
+might not be possible to find *ALL* the issues that match a
+query." 
+  (unless (or limit (numberp limit))
+    (setq limit 100))
+  (car (jira2-call "getIssuesFromJqlSearch" jql limit)))
+
+(defun jira2-get-available-actions (issue-key)
+  "Return the available workflow actions for ISSUE-KEY.
+This runs the getAvailableActions SOAP method."
+  (jira2-make-assoc-list 
+   (car (jira2-call "getAvailableActions" issue-key))
+   'id 'name))
+
+(defun jira2-get-fields-for-action (issue-key action-id)
+  "Return the required fields for the ACTION-ID."
+  (jira2-make-assoc-list
+   (car (jira2-call "getFieldsForAction" issue-key action-id))
+   'id 'name))
+
+(defun jira2-progress-workflow-action (issue-key action-id params)
+  (car (jira2-call "progressWorkflowAction" issue-key action-id params)))
+
 (provide 'jira2)
