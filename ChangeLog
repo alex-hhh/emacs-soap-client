@@ -1,0 +1,30 @@
+2010-03-31  Alexandru Harsanyi  <AlexHarsanyi@gmail.com>
+
+	* jira2.el (jira2-add-worklog-and-autoadjust-remaining-estimate):
+	New function (patch by arvid.jakobsson).
+
+2010-03-31  Alex Harsanyi  <AlexHarsanyi@gmail.com>
+
+	* soap-client.el (soap-load-wsdl-from-url): check that we have
+	retrieved an XML document before passing it to `xml-parse-region'
+
+2010-02-11  Alex Harsanyi  <AlexHarsanyi@gmail.com>
+
+	* jira2.el (jira2-do-jql-search, jira2-get-available-actions)
+	(jira2-get-fields-for-action, jira2-progress-workflow-action): new
+	functions.
+
+2009-12-14  Alex Harsanyi  <AlexHarsanyi@gmail.com>
+
+	* jira2.el (jira2-wsdl-descriptor-url): add type and group to
+	defcustom
+
+2009-12-07  Alex Harsanyi  <AlexHarsanyi@gmail.com>
+
+	* jira2.el (jira2-update-issue)
+	(jira2-create-issue): use car on the jira call result
+
+	* soap-client.el (soap-encode-basic-type): use
+	`url-insert-entities-in-string` when inserting the user data into
+	the message
+
