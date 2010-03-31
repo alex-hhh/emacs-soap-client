@@ -23,8 +23,10 @@
 (require 'cl)
 (require 'xml)
 (require 'warnings)
+(require 'url)
 (require 'url-http)
 (require 'url-util)
+(require 'mm-decode)
 
 (defsubst soap-warning (message &rest args)
   (display-warning 'soap-client (apply 'format message args) :warning))
@@ -406,11 +408,21 @@ If ELEMENT has no resolver function, it is silently ignored"
         (url-request-coding-system 'utf-8)
         (url-http-attempt-keepalives nil))
     (let ((buffer (url-retrieve-synchronously url)))
-      (let ((wsdl-xml (car (with-current-buffer buffer
-                             (xml-parse-region (point-min) (point-max))))))
-        (prog1
-            (soap-parse-wsdl wsdl-xml)
-          (kill-buffer buffer))))))
+      (with-current-buffer buffer
+        (declare (special url-http-response-status))
+        (if (> url-http-response-status 299)
+            (error "Error retrieving WSDL: %s" url-http-response-status))
+        (let ((mime-part (mm-dissect-buffer t t)))
+          (unless mime-part
+            (error "Failed to decode response from server"))
+          (unless (equal (car (mm-handle-type mime-part)) "text/xml")
+            (error "Server response is not an XML document"))
+          (with-temp-buffer 
+            (mm-insert-part mime-part)
+            (let ((wsdl-xml (car (xml-parse-region (point-min) (point-max)))))
+              (prog1
+                  (soap-parse-wsdl wsdl-xml)
+                (kill-buffer buffer)))))))))
 
 (defun soap-load-wsdl (file)
   (with-temp-buffer
