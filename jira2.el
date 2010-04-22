@@ -280,6 +280,22 @@ This runs the getAvailableActions SOAP method."
 (defun jira2-progress-workflow-action (issue-key action-id params)
   (car (jira2-call "progressWorkflowAction" issue-key action-id params)))
 
+(defun jira2-add-worklog-and-autoadjust-remaining-estimate (issue-key start-date time-spent comment)
+  "Log time spent on ISSUE-KEY to its worklog.
+The time worked begings at START-DATE and has a TIME-SPENT
+duration. JIRA will automatically update the remaining estimate
+by subtracting TIME-SPENT from it.
+
+START-DATE should be in the format 2010-02-05T14:30:00Z 
+
+TIME-SPENT can be in one of the following formats: 10m, 120m
+hours; 10h, 120h days; 10d, 120d weeks."
+  (car (jira2-call "addWorklogAndAutoAdjustRemainingEstimate"
+                   issue-key
+                   `((startDate . ,start-date)
+                     (timeSpent . ,time-spent)
+                     (comment   . ,comment)))))
+
 (defun jira2-link-issue (issue-key link-type other-issue-key)
   "Create a link between ISSUE-KEY and OTHER-ISSUE-KEY.
 LINK-TYPE is a string representing the type of the link, e.g
@@ -298,7 +314,6 @@ installation can define its own link types."
 
   (let ((issue (jira2-get-issue issue-key))
         (other-issue (jira2-get-issue other-issue-key)))
-
     (let ((url (concat jira2-host-url 
                        "/secure/LinkExistingIssue.jspa?"
                        (format "linkDesc=%s&linkKey=%s&id=%s&Link=Link" 
