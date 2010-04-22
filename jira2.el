@@ -50,6 +50,12 @@ The default value works if JIRA is located at a hostname named
   :type 'string
   :group 'jira2)
 
+(defcustom jira2-host-url
+  "http://jira"
+  "The address of the jira host."
+  :type 'string
+  :group 'jira2)
+
 (defvar jira2-token nil
   "JIRA token used for authentication")
 
@@ -70,7 +76,26 @@ The default value works if JIRA is located at a hostname named
   (unless jira2-wsdl 
     (jira2-load-wsdl))
   (setq jira2-token 
-        (car (soap-invoke jira2-wsdl "jirasoapservice-v2" "login" username password))))
+        (car (soap-invoke jira2-wsdl "jirasoapservice-v2" "login" username password)))
+
+  ;; At this poing, soap-invoke didn't raise an error, so the login
+  ;; credentials are OK.  use them to log into the web interface as
+  ;; well, as this will be used to link issues (an operation which is
+  ;; not exposed to the SOAP interface.  
+  ;;
+  ;; Note that we don't validate the response at all -- not sure how we
+  ;; would do it...
+  
+  (let ((url (concat jira2-host-url "/secure/Dashboard.jspa")))
+    (let ((url-request-method "POST")
+          (url-package-name "Emacs jira2.el")
+          (url-package-version "1.0")
+          (url-mime-charset-string "utf-8;q=1, iso-8859-1;q=0.5")
+          (url-request-data "abc")
+          (url-request-coding-system 'utf-8)
+          (url-http-attempt-keepalives t))
+      (let ((buffer (url-retrieve-synchronously url)))
+        (kill-buffer buffer)))))
 
 (defun jira2-call (method &rest params)
   "Invoke the JIRA METHOD with supplied PARAMS.
@@ -254,5 +279,38 @@ This runs the getAvailableActions SOAP method."
 
 (defun jira2-progress-workflow-action (issue-key action-id params)
   (car (jira2-call "progressWorkflowAction" issue-key action-id params)))
+
+(defun jira2-link-issue (issue-key link-type other-issue-key)
+  "Create a link between ISSUE-KEY and OTHER-ISSUE-KEY.
+LINK-TYPE is a string representing the type of the link, e.g
+\"requires\", \"depends on\", etc.  I believe each JIRA
+installation can define its own link types."
+  
+  ;; IMPLEMENTATION NOTES: The linking jira issues functionality is
+  ;; not exposed through the SOAP api, we must use the web interface
+  ;; to do the linking.  Unfortunately, we cannot parse the result, so
+  ;; we don't know that the linking was succesfull or not.  To reduce
+  ;; the risk, we use the SOAP api to retrieve the issues for
+  ;; ISSUE-KEY and OTHER-ISSUE-KEY.  This will ensure that we are
+  ;; logged in (see also jira2-login) and that both issues exist. We
+  ;; don't validate the LINK-TYPE, not sure how to do it.
+  ;;
+
+  (let ((issue (jira2-get-issue issue-key))
+        (other-issue (jira2-get-issue other-issue-key)))
+
+    (let ((url (concat jira2-host-url 
+                       "/secure/LinkExistingIssue.jspa?"
+                       (format "linkDesc=%s&linkKey=%s&id=%s&Link=Link" 
+                               link-type other-issue-key (cdr (assq 'id issue))))))
+      (let ((url-request-method "POST")
+           (url-package-name "Emacs scratch.el")
+           (url-package-version "1.0")
+           (url-mime-charset-string "utf-8;q=1, iso-8859-1;q=0.5")
+           (url-request-data "abc")
+           (url-request-coding-system 'utf-8)
+           (url-http-attempt-keepalives t))
+       (let ((buffer (url-retrieve-synchronously url)))
+           (kill-buffer buffer))))))
 
 (provide 'jira2)
