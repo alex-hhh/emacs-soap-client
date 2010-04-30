@@ -99,10 +99,11 @@ The default value works if JIRA is located at a hostname named
         ;; This is just a basic check that the page was retrieved
         ;; correctly.  No error does not indicate a succesfull login,
         ;; we would have to parse the HTML page to find that out...
-        (declare (special url-http-response-status))
-        (if (> url-http-response-status 299)
-            (error "Error logging into JIRA Web interface %s" 
-                   url-http-response-status))
+        (with-current-buffer buffer
+          (declare (special url-http-response-status))
+          (if (> url-http-response-status 299)
+              (error "Error logging into JIRA Web interface %s" 
+                     url-http-response-status)))
         (kill-buffer buffer)))))
 
 (defun jira2-call (method &rest params)
@@ -322,10 +323,11 @@ installation can define its own link types."
         ;; This is just a basic check that the page was retrieved
          ;; correctly.  No error does not indicate a success as we
          ;; have to parse the HTML page to find that out...
-         (declare (special url-http-response-status))
-        (if (> url-http-response-status 299)
-            (error "Error linking issue through JIRA Web interface %s" 
-                   url-http-response-status))
+         (with-current-buffer buffer
+           (declare (special url-http-response-status))
+           (if (> url-http-response-status 299)
+               (error "Error linking issue through JIRA Web interface %s" 
+                      url-http-response-status)))
            (kill-buffer buffer))))))
 
 (provide 'jira2)

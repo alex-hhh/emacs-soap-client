@@ -4,6 +4,8 @@
 	the jira web login page.
 	(jira2-login, jira2-link-issue): add basic check that the URL
 	response is OK.
+	(jira2-login, jira2-link-issue): `url-http-response-status' is
+	only bound in the response buffer
 
 2010-04-22  Alex Harsanyi  <AlexHarsanyi@gmail.com>
 
