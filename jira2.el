@@ -31,7 +31,6 @@
 ;; http://docs.atlassian.com/software/jira/docs/api/rpc-jira-plugin/latest/com/atlassian/jira/rpc/soap/JiraSoapService.html
 
 (require 'soap-client)
-(require 'cl)
 
 (defgroup jira2 nil
   "Access JIRA from emacs."
@@ -97,6 +96,13 @@ The default value works if JIRA is located at a hostname named
           (url-request-coding-system 'utf-8)
           (url-http-attempt-keepalives t))
       (let ((buffer (url-retrieve-synchronously url)))
+        ;; This is just a basic check that the page was retrieved
+        ;; correctly.  No error does not indicate a succesfull login,
+        ;; we would have to parse the HTML page to find that out...
+        (declare (special url-http-response-status))
+        (if (> url-http-response-status 299)
+            (error "Error logging into JIRA Web interface %s" 
+                   url-http-response-status))
         (kill-buffer buffer)))))
 
 (defun jira2-call (method &rest params)
@@ -313,6 +319,13 @@ installation can define its own link types."
            (url-request-coding-system 'utf-8)
            (url-http-attempt-keepalives t))
        (let ((buffer (url-retrieve-synchronously url)))
+        ;; This is just a basic check that the page was retrieved
+         ;; correctly.  No error does not indicate a success as we
+         ;; have to parse the HTML page to find that out...
+         (declare (special url-http-response-status))
+        (if (> url-http-response-status 299)
+            (error "Error linking issue through JIRA Web interface %s" 
+                   url-http-response-status))
            (kill-buffer buffer))))))
 
 (provide 'jira2)

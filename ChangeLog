@@ -2,6 +2,8 @@
 
 	* jira2.el (jira2-login): bugfix: pass username and password to
 	the jira web login page.
+	(jira2-login, jira2-link-issue): add basic check that the URL
+	response is OK.
 
 2010-04-22  Alex Harsanyi  <AlexHarsanyi@gmail.com>
 
