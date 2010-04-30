@@ -86,7 +86,9 @@ The default value works if JIRA is located at a hostname named
   ;; Note that we don't validate the response at all -- not sure how we
   ;; would do it...
   
-  (let ((url (concat jira2-host-url "/secure/Dashboard.jspa")))
+  (let ((url (concat jira2-host-url "/secure/Dashboard.jspa?"
+                     (format "&os_username=%s&os_password=%s&os_cookie=true" 
+                             username password))))
     (let ((url-request-method "POST")
           (url-package-name "Emacs jira2.el")
           (url-package-version "1.0")
