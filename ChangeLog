@@ -14,6 +14,11 @@
 	(jira2-link-issue): new function, uses JIRA web interface instead
 	of the SOAP api
 
+2010-03-31  Alexandru Harsanyi  <AlexHarsanyi@gmail.com>
+
+	* jira2.el (jira2-add-worklog-and-autoadjust-remaining-estimate):
+	New function (patch by arvid.jakobsson).
+
 2010-03-31  Alex Harsanyi  <AlexHarsanyi@gmail.com>
 
 	* soap-client.el (soap-load-wsdl-from-url): check that we have
