@@ -215,7 +215,8 @@ binding) but the same name."
   operations)
 
 (defstruct (soap-binding (:include soap-element))
-  port-type)
+  port-type
+  (soap-actions (make-hash-table :test 'equal) :readonly t))
 
 (defstruct (soap-port (:include soap-element))
   service-url
@@ -501,9 +502,7 @@ If ELEMENT has no resolver function, it is silently ignored"
             (soap-wsdl-add-namespace (soap-port-type-operations port-type) wsdl)))
 
         (dolist (node (xml-get-children node (soap-wk2l 'wsdl:binding)))
-          (let ((name (xml-get-attribute node 'name))
-                (type (xml-get-attribute node 'type)))
-            (soap-namespace-put (make-soap-binding :name name :port-type type) ns)))
+          (soap-namespace-put (soap-parse-binding node) ns))
 
         (dolist (node (xml-get-children node (soap-wk2l 'wsdl:service)))
           (dolist (node (xml-get-children node (soap-wk2l 'wsdl:port)))
@@ -582,7 +581,9 @@ Return a SOAP-NAMESPACE containg the elements."
     (dolist (e (xml-get-children node (soap-wk2l 'xsd:element)))
       (let ((name (xml-get-attribute-or-nil e 'name))
             (type (xml-get-attribute-or-nil e 'type))
-            (nillable? (equal (xml-get-attribute-or-nil e 'nillable) "true"))
+            (nillable? (or (equal (xml-get-attribute-or-nil e 'nillable) "true")
+                           (let ((e (xml-get-attribute-or-nil e 'minOccurs)))
+                             (and e (equal e "0")))))
             (multiple? (let ((e (xml-get-attribute-or-nil e 'maxOccurs)))
                          (and e (not (equal e "1"))))))
         (unless type
@@ -697,6 +698,19 @@ Return a SOAP-NAMESPACE containg the elements."
      :input input
      :output output
      :faults (nreverse faults))))
+
+(defun soap-parse-binding (node)
+  (assert (eq (xml-node-name node) (soap-wk2l 'wsdl:binding)))
+  (let ((name (xml-get-attribute node 'name))
+        (type (xml-get-attribute node 'type)))
+    (let ((binding (make-soap-binding :name name :port-type type)))
+      (dolist (wo (xml-get-children node (soap-wk2l 'wsdl:operation)))
+        (let ((name (xml-get-attribute wo 'name)))
+          (dolist (so (xml-get-children wo (soap-wk2l 'soap:operation)))
+            (let ((soap-action (xml-get-attribute-or-nil so 'soapAction)))
+              (when soap-action
+                (puthash name soap-action (soap-binding-soap-actions binding)))))))
+      binding)))
 
 ;;;;; Describe WSDL operations
 ;;;; SOAP type decoding
@@ -970,7 +984,8 @@ This is because it is easier to work with list results in LISP."
            (port-type (soap-binding-port-type binding))
            (operation (soap-namespace-get operation-name 
                                           (soap-port-type-operations port-type) 
-                                          'soap-operation-p)))
+                                          'soap-operation-p))
+           (soap-action (gethash operation-name (soap-binding-soap-actions binding) "")))
       (unless operation
         (error "No operation %s for SOAP service %s" operation-name service))
     
@@ -983,7 +998,7 @@ This is because it is easier to work with list results in LISP."
             (url-http-attempt-keepalives t)
             (url-request-extra-headers (list
                                         (cons "Connection" "keep-alive")
-                                        (cons "SOAPAction" "")
+                                        (cons "SOAPAction" soap-action)
                                         (cons "Content-Type" "text/xml; charset=utf-8"))))
         (let ((buffer (url-retrieve-synchronously (soap-port-service-url port))))
           (let ((response (car (with-current-buffer buffer

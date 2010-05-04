@@ -19,6 +19,11 @@
 	(soap-parse-schema): parse toplevel element tags
 	(soap-parse-schema-element): new function
 	(soap-parse-complex-type): handle empty complex types
+	(soap-parse-sequence): make an element nillable if its minOccurs
+	is 0
+	(soap-binding): add a soap-actions member
+	(soap-parse-sequence): an element with 0 minOccurs is nillable
+	(soap-parse-binding): new function
 
 2010-04-30  Alex Harsanyi  <AlexHarsanyi@gmail.com>
 
