@@ -223,7 +223,7 @@ binding) but the same name."
 
 (defun soap-default-xsd-types ()
   "Return a namespace containing some of the XMLSchema types."
-  (let ((ns (make-soap-namespace :name "http://www.w3.org/1999/XMLSchema")))
+  (let ((ns (make-soap-namespace :name "http://www.w3.org/2001/XMLSchema")))
     (dolist (type '("string" "dateTime" "boolean" "long" "int" "anyType"))
       (soap-namespace-put
        (make-soap-basic-type :name type :kind (intern type))
@@ -533,12 +533,32 @@ Return a SOAP-NAMESPACE containg the elements."
       ;; know how to handle basic types beyond the built in ones anyway.
       (dolist (node (xml-get-children node (soap-wk2l 'xsd:complexType)))
         (soap-namespace-put (soap-parse-complex-type node) ns))
+
+      (dolist (node (xml-get-children node (soap-wk2l 'xsd:element)))
+        (soap-namespace-put (soap-parse-schema-element node) ns))
+
       ns)))
+
+(defun soap-parse-schema-element (node)
+  (assert (eq (xml-node-name node) (soap-wk2l 'xsd:element)))
+  (let ((name (xml-get-attribute-or-nil node 'name))
+        type)
+    ;; A schema element that contains an inline complex type --
+    ;; construct the actual complex type for it.
+    (let ((type-node (xml-get-children node (soap-wk2l 'xsd:complexType))))
+      (when (> (length type-node) 0)
+        (assert (= (length type-node) 1)) ; only one complex type definition per element
+        (setq type (soap-parse-complex-type (car type-node)))))
+    (setf (soap-element-name type) name)
+    type))
 
 (defun soap-parse-complex-type (node)
   (assert (eq (xml-node-name node) (soap-wk2l 'xsd:complexType)))
   (let ((name (xml-get-attribute-or-nil node 'name))
-        type)
+        ;; Use a dummy type for the complex type, it will be replaced
+        ;; with the real type below, except when the complex type node
+        ;; is empty...
+        (type (make-soap-sequence-type :elements nil)))
     (dolist (c (xml-node-children node))
       (when (consp c)               ; skip string nodes, which are whitespace
         (let ((node-name (xml-node-name c)))

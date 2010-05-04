@@ -14,6 +14,11 @@
 	element requested. All callers updated.
 	(soap-parse-sequence): accept elements that have inline
 	complexType definitions.
+	(soap-default-xsd-types): use the
+	"http://www.w3.org/2001/XMLSchema" as XMLSchema.
+	(soap-parse-schema): parse toplevel element tags
+	(soap-parse-schema-element): new function
+	(soap-parse-complex-type): handle empty complex types
 
 2010-04-30  Alex Harsanyi  <AlexHarsanyi@gmail.com>
 
