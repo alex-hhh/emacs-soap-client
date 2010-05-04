@@ -135,31 +135,51 @@ dynamically bound variable, controlled by
   (name nil :read-only t)               ; e.g "http://xml.apache.org/xml-soap"
   (elements (make-hash-table :test 'equal) :read-only t))
 
-(defun soap-namespace-put (element ns &optional replace)
+(defun soap-namespace-put (element ns)
   "Store ELEMENT in NS.
-An error will be signaled if an element by the same name is
-already present in NS, unless REPLACE is non nil."
+Multiple elements with the same name can be stored in a
+namespace.  When retrieving the element you can specify a
+discriminant predicate to `soap-namespace-get'"
   (let ((name (soap-element-name element)))
-    (unless (or replace
-                (not (gethash name (soap-namespace-elements ns))))
-      (error "Element %s already present in namespace %s"
-             name (soap-namespace-name ns)))
-    (puthash name element (soap-namespace-elements ns))))
+    (push element (gethash name (soap-namespace-elements ns)))))
 
 (defun soap-namespace-put-link (name target ns &optional replace)
   "Store a link from NAME to TARGET in NS.
 An error will be signaled if an element by the same name is
-already present in NS, unless REPLACE is non nil."
-  (unless (or replace
-              (not (gethash name (soap-namespace-elements ns))))
-    (error "Element %s already present in namespace %s"
-           name (soap-namespace-name ns)))
-  (puthash name
-           (make-soap-namespace-link :name name :target target)
-           (soap-namespace-elements ns)))
+already present in NS, unless REPLACE is non nil.
 
-(defun soap-namespace-get (name ns)
-  (gethash name (soap-namespace-elements ns)))
+TARGET can be either a SOAP-ELEMENT or a string denoting an
+element name into another namespace.
+
+If NAME is nil, an element with the same name as TARGET will be
+added to the namespace."
+
+  (unless (and name (not (equal name "")))
+    (cond ((soap-element-p target)
+           (setq name (soap-element-name target)))
+          ((stringp target)
+           (cond ((string-match "^\\(.*\\):\\(.*\\)$" target)
+                  (setq name (match-string 2 target)))
+                 (t
+                  (setq name target))))))
+
+  (assert name)
+  (push (make-soap-namespace-link :name name :target target)
+        (gethash name (soap-namespace-elements ns))))
+
+(defun soap-namespace-get (name ns &optional discrimninant-predicate)
+  "Retrieve an element with NAME from the namespace NS.
+If multiple elements with the same name exist,
+DISCRIMNINANT-PREDICATE is used to pick one of them.  This allows
+storing elements of different types (like a message type and a
+binding) but the same name."
+  (let ((e (gethash name (soap-namespace-elements ns))))
+    (cond (discrimninant-predicate (find-if discrimninant-predicate e))
+          ((= (length e) 1) (car e))
+          ((> (length e) 1)
+           (error "Multiple elements named %s, discriminant needed" name))
+          (t
+           nil))))
 
 
 ;;;; WSDL documents
@@ -234,11 +254,12 @@ elements will be added to it."
     (if existing
         ;; Add elements from NS to EXISTING, replacing existing values.
         (maphash (lambda (key value)
-                   (soap-namespace-put value existing))
+                   (dolist (v value)
+                     (soap-namespace-put v existing)))
                  (soap-namespace-elements ns))
         (push ns (soap-wsdl-namespaces wsdl)))))
 
-(defun soap-wsdl-get (name wsdl &optional use-local-alias-table)
+(defun soap-wsdl-get (name wsdl &optional predicate use-local-alias-table)
   "Retrieve element NAME from the WSDL document.
 If USE-LOCAL-ALIAS-TABLE is not nil, `*soap-local-xmlns*` will be
 used to resolve the namespace alias."
@@ -260,10 +281,15 @@ used to resolve the namespace alias."
                  (unless ns
                    (error "Unknown namespace: %s, refered by alias %s"
                           namespace ns-alias))
-                 (let ((element (soap-namespace-get name ns)))
+                 (let ((element (soap-namespace-get name ns 
+                                                    (if predicate
+                                                        (lambda (e)
+                                                          (or (funcall 'soap-namespace-link-p e)
+                                                              (funcall predicate e)))
+                                                        nil))))
                    (if (soap-namespace-link-p element)
                        ;; NOTE: don't use the local alias table here
-                       (soap-wsdl-get (soap-namespace-link-target element) wsdl)
+                       (soap-wsdl-get (soap-namespace-link-target element) wsdl predicate)
                        element))))))
           (t
            (error "Cannot resolve %s" name)))))
@@ -351,12 +377,12 @@ If ELEMENT has no resolver function, it is silently ignored"
 (defun soap-resolve-references-for-binding (binding wsdl)
   (when (stringp (soap-binding-port-type binding))
     (setf (soap-binding-port-type binding)
-          (soap-wsdl-get (soap-binding-port-type binding) wsdl))))
+          (soap-wsdl-get (soap-binding-port-type binding) wsdl 'soap-port-type-p))))
 
 (defun soap-resolve-references-for-port (port wsdl)
   (when (stringp (soap-port-binding port))
     (setf (soap-port-binding port)
-          (soap-wsdl-get (soap-port-binding port) wsdl))))
+          (soap-wsdl-get (soap-port-binding port) wsdl 'soap-binding-p))))
 
 ;; Install resolvers for our types
 (progn
@@ -388,15 +414,21 @@ If ELEMENT has no resolver function, it is silently ignored"
                 (soap-wsdl-add-alias nstag (soap-namespace-name ns) wsdl)
                 (throw 'done t)))))
 
-      (maphash (lambda (name element)
-                 (when (soap-element-p element) ; skip links
-                   (incf nprocessed)
-                   (soap-resolve-references-for-element element wsdl)
-                   (setf (soap-element-namespace-tag element) nstag)))
-               (soap-namespace-elements ns))
+        (maphash (lambda (name element)
+                   (cond ((soap-element-p element) ; skip links
+                          (incf nprocessed)
+                          (soap-resolve-references-for-element element wsdl)
+                          (setf (soap-element-namespace-tag element) nstag))
+                         ((listp element)
+                          (dolist (e element)
+                            (when (soap-element-p e)
+                              (incf nprocessed)
+                              (soap-resolve-references-for-element e wsdl)
+                              (setf (soap-element-namespace-tag e) nstag))))))
+                 (soap-namespace-elements ns))))
 
-      (message "Processed %d" nprocessed)
-      wsdl))))
+    (message "Processed %d" nprocessed))
+    wsdl)
 
 ;;;;; Loading WSDL from XML documents
 
@@ -515,6 +547,10 @@ Return a SOAP-NAMESPACE containg the elements."
              (setq type (soap-parse-complex-type-sequence c)))
             ((eq node-name (soap-wk2l 'xsd:complexContent))
              (setq type (soap-parse-complex-type-complex-content c)))
+            ((eq node-name (soap-wk2l 'xsd:attribute))
+             ;; The name of this node comes from an attribute tag
+             (let ((n (xml-get-attribute-or-nil c 'name)))
+               (setq name n)))
             (t
              (error "Unknown node type %s" node-name))))))
     (setf (soap-element-name type) name)
@@ -527,7 +563,15 @@ Return a SOAP-NAMESPACE containg the elements."
       (let ((name (xml-get-attribute-or-nil e 'name))
             (type (xml-get-attribute-or-nil e 'type))
             (nillable? (equal (xml-get-attribute-or-nil e 'nillable) "true"))
-            (multiple? (xml-get-attribute-or-nil e 'maxOccurs)))
+            (multiple? (let ((e (xml-get-attribute-or-nil e 'maxOccurs)))
+                         (and e (not (equal e "1"))))))
+        (unless type
+          ;; The node does not have a type, maybe it has a complexType
+          ;; defined inline...
+          (let ((type-node (xml-get-children e (soap-wk2l 'xsd:complexType))))
+            (when (> (length type-node) 0)
+              (assert (= (length type-node) 1)) ; only one complex type definition per element
+              (setq type (soap-parse-complex-type (car type-node))))))
         (push (make-soap-sequence-element
                :name name :type type :nillable? nillable? :multiple? multiple?)
               elements)))
@@ -580,7 +624,7 @@ Return a SOAP-NAMESPACE containg the elements."
     (dolist (node (xml-get-children node (soap-wk2l 'wsdl:operation)))
       (let ((o (soap-parse-operation node)))
 
-        (let ((other-operation (soap-namespace-get (soap-element-name o) ns)))
+        (let ((other-operation (soap-namespace-get (soap-element-name o) ns 'soap-operation-p)))
           (if other-operation
               ;; Unfortunately, the Confluence WSDL defines two operations
               ;; named "search" which differ only in parameter names...
@@ -599,7 +643,9 @@ Return a SOAP-NAMESPACE containg the elements."
 
                 (dolist (fault (soap-operation-faults o))
                   (destructuring-bind (name . message) fault
-                    (soap-namespace-put-link name message ns 'replace))))))))
+                    (soap-namespace-put-link name message ns 'replace)))
+
+                )))))
 
     (make-soap-port-type :name (xml-get-attribute node 'name)
                         :operations ns)))
@@ -752,7 +798,7 @@ This is because it is easier to work with list results in LISP."
 
 (defun soap-parse-response (response-node wsdl soap-body)
   (soap-with-local-xmlns response-node
-    (let ((message (soap-wsdl-get (xml-node-name response-node) wsdl 'local))
+    (let ((message (soap-wsdl-get (xml-node-name response-node) wsdl 'soap-message-p 'local))
           (decoded-parts nil))
       (assert (soap-message-p message))
       (let ((*soap-multi-refs* (xml-get-children soap-body 'multiRef))
@@ -902,8 +948,9 @@ This is because it is easier to work with list results in LISP."
     
     (let* ((binding (soap-port-binding port))
            (port-type (soap-binding-port-type binding))
-           (operation (soap-namespace-get 
-                       operation-name (soap-port-type-operations port-type))))
+           (operation (soap-namespace-get operation-name 
+                                          (soap-port-type-operations port-type) 
+                                          'soap-operation-p)))
       (unless operation
         (error "No operation %s for SOAP service %s" operation-name service))
     
