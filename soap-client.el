@@ -944,11 +944,7 @@ This is because it is easier to work with list results in LISP."
                              (dolist (c (xml-node-children response-node))
                                (when (consp c)
                                  (soap-with-local-xmlns c
-                                   (message "Trying %s against %s" 
-                                            (soap-l2wsdl (xml-node-name c) wsdl)
-                                            fqname)
                                    (when (equal (soap-l2wsdl (xml-node-name c) wsdl) fqname)
-                                     (message "Found it")
                                      (throw 'found c))))))))))
 
             (assert node)
