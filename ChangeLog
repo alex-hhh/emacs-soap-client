@@ -13,6 +13,8 @@
 	(soap-parse-envelope, soap-parse-response, soap-encode-body)
 	(soap-create-envelope, soap-invoke): handle literal vs encoded
 	bodies
+	(soap-parse-response): corrected message check
+	(soap-invoke): increased buffer limit for issuing warning
 
 2010-05-04  Alex Harsanyi  <AlexHarsanyi@gmail.com>
 

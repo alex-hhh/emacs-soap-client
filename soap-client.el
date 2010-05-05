@@ -920,11 +920,13 @@ This is because it is easier to work with list results in LISP."
 
     (soap-with-local-xmlns response-node
 
-      (when (and (eq use 'encoded)
-                 (not (equal (xml-node-name response-node) (soap-element-name message))))
-        (error "Unexpected message: got %s, expecting %s"
-               (xml-node-name response-node)
-               (soap-element-name message)))
+      (when (eq use 'encoded)
+        (let* ((received-message-name (soap-l2wsdl (xml-node-name response-node) wsdl))
+               (received-message (soap-wsdl-get received-message-name wsdl 'soap-message-p)))
+          (unless (eq received-message message)
+            (error "Unexpected message: got %s, expecting %s"
+                   received-message-name
+                   (soap-element-name message)))))
 
       (let ((decoded-parts nil)
             (*soap-multi-refs* (xml-get-children soap-body 'multiRef))
@@ -1118,7 +1120,7 @@ This is because it is easier to work with list results in LISP."
                                         (cons "Content-Type" "text/xml; charset=utf-8"))))
         (let ((buffer (url-retrieve-synchronously (soap-port-service-url port))))
           (let ((response (car (with-current-buffer buffer
-                                 (when (> (buffer-size) 10000)
+                                 (when (> (buffer-size) 1000000)
                                    (soap-warning "Received large message: %s bytes" (buffer-size)))
                                  (xml-parse-region (point-min) (point-max))))))
             (prog1
