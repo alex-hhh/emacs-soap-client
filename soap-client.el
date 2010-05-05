@@ -19,6 +19,10 @@
 ;; Created: December, 2009
 ;; Keywords: soap, web-services
 ;; Homepage: http://code.google.com/p/emacs-soap-client
+;;
+;; usefull links:
+;;
+;; http://www.w3.org/TR/wsdl
 
 (require 'cl)
 (require 'xml)
@@ -212,11 +216,20 @@ binding) but the same name."
   faults)                               ; a list of (NAME . MESSAGE)
 
 (defstruct (soap-port-type (:include soap-element))
-  operations)
+  operations)                           ; a namespace of operations
+
+;; A bound operation is an operation which has a soap action and a use
+;; method attached -- these are attached as part of a binding and we
+;; can have different bindings for the same operations.
+(defstruct soap-bound-operation
+  operation                             ; SOAP-OPERATION
+  soap-action                           ; value for SOAPAction HTTP header
+  use                                   ; 'literal or 'encoded, see http://www.w3.org/TR/wsdl#_soap:body
+  )
 
 (defstruct (soap-binding (:include soap-element))
   port-type
-  (soap-actions (make-hash-table :test 'equal) :readonly t))
+  (operations (make-hash-table :test 'equal) :readonly t))
 
 (defstruct (soap-port (:include soap-element))
   service-url
@@ -235,8 +248,8 @@ binding) but the same name."
 
 ;; The WSDL data structure used for encoding/decoding SOAP messages
 (defstruct soap-wsdl
-  ports
-  alias-table                           ; alist of namespace aliases
+  ports                                 ; a list of SOAP-PORT instances
+  alias-table                           ; a list of namespace aliases
   namespaces                            ; a list of namespaces
   )
 
@@ -295,6 +308,38 @@ used to resolve the namespace alias."
           (t
            (error "Cannot resolve %s" name)))))
 
+(defun soap-l2wsdl (l-name wsdl)
+  "Convert L-NAME to a fully qualified name in this WSDL.
+L-NAME is usually a node name in an XML document and this
+function will return a fully qualified name, suitable for a
+`soap-wsdl-get' call.  Note that only name resolving is done, the
+actual element might not exist in this WSDL.
+
+This function will only work inside the body of a
+`soap-with-local-xmlns' macro."
+  (let ((l-name-1 (if (symbolp l-name) (symbol-name l-name) l-name)))
+    (let (ns name)
+      (cond
+        ((string-match "^\\(.*\\):\\(.*\\)$" l-name-1)
+         (setq ns (match-string 1 l-name-1))
+         (setq name (match-string 2 l-name-1)))
+        (t
+         (setq name l-name-1)))
+
+      (let ((namespace 
+             (cond (ns (cdr (assoc ns *soap-local-xmlns*)))
+                   (t *soap-default-xmlns*))))
+
+        (let ((nstag (car (rassoc namespace (soap-wsdl-alias-table wsdl)))))
+          (unless nstag
+            (error "Namespace %s not found in WSDL" namespace))
+
+          (let ((wsdl-name (concat nstag ":" name)))
+            (if (symbolp l-name)
+                (intern wsdl-name)
+                wsdl-name)))))))
+
+
 ;;;;; Resolving references for wsdl types
 
 ;; When the WSDL elements are created from the XML document, they refer to
@@ -345,12 +390,9 @@ If ELEMENT has no resolver function, it is silently ignored"
         (when (stringp type)
           (setq type (soap-wsdl-get type wsdl)))
         (push (cons name type) resolved-parts)))
-    (setf (soap-message-parts message) (nreverse resolved-parts))))
+     (setf (soap-message-parts message) (nreverse resolved-parts))))
 
 (defun soap-resolve-references-for-operation (operation wsdl)
-  (setf (soap-operation-parameter-order operation)
-        (mapcar 'intern (soap-operation-parameter-order operation)))
-
   (let ((input (soap-operation-input operation)))
     (let ((name (car input))
           (message (cdr input)))
@@ -373,12 +415,26 @@ If ELEMENT has no resolver function, it is silently ignored"
           (push (cons (intern name) (soap-wsdl-get message wsdl))
                 resolved-faults)
           (push fault resolved-faults))))
-    (setf (soap-operation-faults operation) resolved-faults)))
+    (setf (soap-operation-faults operation) resolved-faults))
+
+  (if (= (length (soap-operation-parameter-order operation)) 0)
+      (setf (soap-operation-parameter-order operation)
+            (mapcar 'car (soap-message-parts 
+                          (cdr (soap-operation-input operation))))))
+
+  (setf (soap-operation-parameter-order operation)
+        (mapcar 'intern (soap-operation-parameter-order operation))))
 
 (defun soap-resolve-references-for-binding (binding wsdl)
   (when (stringp (soap-binding-port-type binding))
     (setf (soap-binding-port-type binding)
-          (soap-wsdl-get (soap-binding-port-type binding) wsdl 'soap-port-type-p))))
+          (soap-wsdl-get (soap-binding-port-type binding) wsdl 'soap-port-type-p)))
+
+  (let ((port-ops (soap-port-type-operations (soap-binding-port-type binding))))
+    (maphash (lambda (k v)
+               (setf (soap-bound-operation-operation v)
+                     (soap-namespace-get k port-ops 'soap-operation-p)))
+             (soap-binding-operations binding))))
 
 (defun soap-resolve-references-for-port (port wsdl)
   (when (stringp (soap-port-binding port))
@@ -634,8 +690,9 @@ Return a SOAP-NAMESPACE containg the elements."
         parts)
     (dolist (p (xml-get-children node (soap-wk2l 'wsdl:part)))
       (let ((name (xml-get-attribute-or-nil p 'name))
-            (type (xml-get-attribute-or-nil p 'type)))
-        (push (cons name type) parts)))
+            (type (xml-get-attribute-or-nil p 'type))
+            (element (xml-get-attribute-or-nil p 'element)))
+        (push (cons name (or type element)) parts)))
     (make-soap-message :name name :parts (nreverse parts))))
 
 (defun soap-parse-port-type (node)
@@ -705,11 +762,32 @@ Return a SOAP-NAMESPACE containg the elements."
         (type (xml-get-attribute node 'type)))
     (let ((binding (make-soap-binding :name name :port-type type)))
       (dolist (wo (xml-get-children node (soap-wk2l 'wsdl:operation)))
-        (let ((name (xml-get-attribute wo 'name)))
-          (dolist (so (xml-get-children wo (soap-wk2l 'soap:operation)))
-            (let ((soap-action (xml-get-attribute-or-nil so 'soapAction)))
-              (when soap-action
-                (puthash name soap-action (soap-binding-soap-actions binding)))))))
+        (let ((name (xml-get-attribute wo 'name))
+              soap-action 
+              use)
+          (dolist (so (xml-get-children wo (soap-wk2l 'wsdlsoap:operation)))
+            (setq soap-action (xml-get-attribute-or-nil so 'soapAction)))
+
+          ;; Search a wsdlsoap:body node and find a "use" tag.  The
+          ;; same use tag is assumed to be present for both input and
+          ;; output types (alhtough the WDSL spec allows separate
+          ;; "use"-s for each of them...
+
+          (dolist (i (xml-get-children wo (soap-wk2l 'wsdl:input)))
+            (dolist (b (xml-get-children i (soap-wk2l 'wsdlsoap:body)))
+              (setq use (or use
+                            (xml-get-attribute-or-nil b 'use)))))
+
+          (unless use
+            (dolist (i (xml-get-children wo (soap-wk2l 'wsdl:output)))
+              (dolist (b (xml-get-children i (soap-wk2l 'wsdlsoap:body)))
+                (setq use (or use
+                              (xml-get-attribute-or-nil b 'use))))))
+
+          (puthash name (make-soap-bound-operation :operation name
+                                                   :soap-action soap-action
+                                                   :use (and use (intern use)))
+                   (soap-binding-operations binding))))
       binding)))
 
 ;;;;; Describe WSDL operations
@@ -808,7 +886,7 @@ This is because it is easier to work with list results in LISP."
      '(error soap-error))
 (put 'soap-error 'error-message "SOAP error")
 
-(defun soap-parse-envelope (node wsdl)
+(defun soap-parse-envelope (node operation wsdl)
   (soap-with-local-xmlns node
     (assert (eq (xml-node-name node) (soap-wk2l 'soap:Envelope)))
     (let ((body (car (xml-get-children node (soap-wk2l 'soap:Body)))))
@@ -824,25 +902,58 @@ This is because it is easier to work with list results in LISP."
 
       ;; First (non string) element of the body is the root node of he
       ;; response
-      (let ((response (catch 'found
-                        (dolist (n (xml-node-children body))
-                          (when (consp n)
-                            (throw 'found n))))))
-        (soap-parse-response response wsdl body)))))
+      (let ((response (if (eq (soap-bound-operation-use operation) 'literal)
+                          ;; For 'literal uses, the response is the actual body
+                          body
+                          ;; ...otherwise the first non string element
+                          ;; of the body is the response
+                          (catch 'found
+                            (dolist (n (xml-node-children body))
+                              (when (consp n)
+                                (throw 'found n)))))))
+        (soap-parse-response response operation wsdl body)))))
 
-(defun soap-parse-response (response-node wsdl soap-body)
-  (soap-with-local-xmlns response-node
-    (let ((message (soap-wsdl-get (xml-node-name response-node) wsdl 'soap-message-p 'local))
-          (decoded-parts nil))
-      (assert (soap-message-p message))
-      (let ((*soap-multi-refs* (xml-get-children soap-body 'multiRef))
+(defun soap-parse-response (response-node operation wsdl soap-body)
+  (let* ((op (soap-bound-operation-operation operation))
+         (use (soap-bound-operation-use operation))
+         (message (cdr (soap-operation-output op))))
+
+    (soap-with-local-xmlns response-node
+
+      (when (and (eq use 'encoded)
+                 (not (equal (xml-node-name response-node) (soap-element-name message))))
+        (error "Unexpected message: got %s, expecting %s"
+               (xml-node-name response-node)
+               (soap-element-name message)))
+
+      (let ((decoded-parts nil)
+            (*soap-multi-refs* (xml-get-children soap-body 'multiRef))
             (*soap-decoded-multi-refs* nil))
+
         (dolist (part (soap-message-parts message))
           (let ((tag (car part))
-                (type (cdr part)))
-            (let ((node (car (xml-get-children response-node tag))))
-              (assert node)
-              (push (soap-decode-type type node) decoded-parts))))
+                (type (cdr part))
+                node)
+            
+            (cond ((eq use 'encoded)
+                   (setq node (car (xml-get-children response-node tag))))
+                  ((eq use 'literal)
+                   (setq node
+                         (catch 'found
+                           (let ((fqname (intern (soap-element-fq-name type))))
+                             (dolist (c (xml-node-children response-node))
+                               (when (consp c)
+                                 (soap-with-local-xmlns c
+                                   (message "Trying %s against %s" 
+                                            (soap-l2wsdl (xml-node-name c) wsdl)
+                                            fqname)
+                                   (when (equal (soap-l2wsdl (xml-node-name c) wsdl) fqname)
+                                     (message "Found it")
+                                     (throw 'found c))))))))))
+
+            (assert node)
+            (push (soap-decode-type type node) decoded-parts)))
+
         decoded-parts))))
 
 ;;;; SOAP type encoding
@@ -870,7 +981,7 @@ This is because it is easier to work with list results in LISP."
     (insert "</" xml-tag ">\n")))
 
 (defun soap-encode-sequence-type (param-name type value)
-  (let ((xml-tag  (symbol-name param-name))
+  (let ((xml-tag  (if (symbolp param-name) (symbol-name param-name) param-name))
         (xsi-type (soap-element-fq-name type)))
     (insert "<" xml-tag " xsi:type=\"" xsi-type "\"")
     (if value
@@ -928,34 +1039,47 @@ This is because it is easier to work with list results in LISP."
   (put (aref (make-soap-array-type) 0)
        'soap-encoder 'soap-encode-array-type))
 
-(defun soap-encode-request (operation parameters)
-  (insert "<" (soap-element-namespace-tag operation)
-          ":" (soap-element-name operation) ">\n")
-  (let ((message (cdr (soap-operation-input operation)))
-        (parameter-order (soap-operation-parameter-order operation)))
+(defun soap-encode-body (operation parameters)
+  (let* ((op (soap-bound-operation-operation operation))
+         (use (soap-bound-operation-use operation))
+         (message (cdr (soap-operation-input op)))
+         (parameter-order (soap-operation-parameter-order op)))
 
     (unless (= (length parameter-order) (length parameters))
       (error "Wrong number of parameters for %s: expected %d, got %s"
-             (soap-element-name operation)
+             (soap-element-name op)
              (length parameter-order)
              (length parameters)))
 
+    (insert "<soap:Body>\n")
+    (when (eq use 'encoded)
+      (insert "<" (soap-element-fq-name op) ">\n"))
+
     (let ((param-table (loop for formal in parameter-order
                           for value in parameters
-                            collect (cons formal value))))
+                          collect (cons formal value))))
       (dolist (part (soap-message-parts message))
-        (let* ((name (car part))
+        (let* ((param-name (car part))
                (type (cdr part))
-               (value (cdr (assoc name param-table))))
-          (soap-encode-value name type value)))))
-  (insert "</" (soap-element-namespace-tag operation)
-          ":" (soap-element-name operation) ">\n")
-  (push (soap-element-namespace-tag operation) *soap-encoded-namespaces*))
+               (tag-name (if (eq use 'encoded) 
+                             param-name
+                             (soap-element-fq-name type)))
+               (value (cdr (assoc param-name param-table))))
+          (soap-encode-value tag-name type value))))
+
+    (when (eq use 'encoded)
+      (insert "</" (soap-element-fq-name op) ">\n"))
+    (insert "</soap:Body>\n")
+    (push (soap-element-namespace-tag op) *soap-encoded-namespaces*)))
 
 (defun soap-create-envelope (wsdl operation parameters)
   (with-temp-buffer
     (let ((*soap-encoded-namespaces* '("xsi" "soap" "soapenc")))
-      (soap-encode-request operation parameters)
+
+      ;; Create the request body
+      (soap-encode-body operation parameters)
+
+      ;; Put the envelope around the body
       (goto-char (point-min))
       (insert "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<soap:Envelope\n")
       (insert "    soapenc:encodingStyle=\"http://schemas.xmlsoap.org/soap/encoding/\"\n")
@@ -967,9 +1091,9 @@ This is because it is easier to work with list results in LISP."
           (insert nsname)
         (insert "\"\n")))
       (insert ">\n")
-      (insert "<soap:Body>\n")
       (goto-char (point-max))
-      (insert "</soap:Body>\n</soap:Envelope>\n"))
+      (insert "</soap:Envelope>\n"))
+
     (buffer-string)))
 
 ;;;; invoking soap methods
@@ -981,30 +1105,28 @@ This is because it is easier to work with list results in LISP."
       (error "Unknown SOAP service: %s" service))
     
     (let* ((binding (soap-port-binding port))
-           (port-type (soap-binding-port-type binding))
-           (operation (soap-namespace-get operation-name 
-                                          (soap-port-type-operations port-type) 
-                                          'soap-operation-p))
-           (soap-action (gethash operation-name (soap-binding-soap-actions binding) "")))
+           (operation (gethash operation-name (soap-binding-operations binding))))
       (unless operation
         (error "No operation %s for SOAP service %s" operation-name service))
     
       (let ((url-request-method "POST")
             (url-package-name "esoap.el")
             (url-package-version "1.0")
+            (url-http-version "1.0")
             (url-request-data (soap-create-envelope wsdl operation parameters))
             (url-mime-charset-string "utf-8;q=1, iso-8859-1;q=0.5")
             (url-request-coding-system 'utf-8)
             (url-http-attempt-keepalives t)
             (url-request-extra-headers (list
-                                        (cons "Connection" "keep-alive")
-                                        (cons "SOAPAction" soap-action)
+                                        (cons "SOAPAction" (soap-bound-operation-soap-action operation))
                                         (cons "Content-Type" "text/xml; charset=utf-8"))))
         (let ((buffer (url-retrieve-synchronously (soap-port-service-url port))))
           (let ((response (car (with-current-buffer buffer
+                                 (when (> (buffer-size) 10000)
+                                   (soap-warning "Received large message: %s bytes" (buffer-size)))
                                  (xml-parse-region (point-min) (point-max))))))
             (prog1
-                (soap-parse-envelope response wsdl)
+                (soap-parse-envelope response operation wsdl)
               (kill-buffer buffer))))))))
   
 (provide 'soap-client)
