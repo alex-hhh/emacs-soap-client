@@ -973,6 +973,15 @@ This is because it is easier to work with list results in LISP."
           (insert ">")
           (cond ((eq (soap-basic-type-kind type) 'boolean)
                  (insert (if value "true" "false")))
+                ((eq (soap-basic-type-kind type) 'dateTime)
+                 (cond ((and (consp value) ; is there a time-value-p ?
+                             (>= (length value) 2)
+                             (numberp (nth 0 value))
+                             (numberp (nth 1 value)))
+                        ;; Value is a (current-time) style value, convert to a string
+                        (insert (format-time-string "%Y-%m-%dT%H:%M:%S" value)))
+                       (t
+                        (insert value))))
                 (t
                  (insert (url-insert-entities-in-string (format "%s" value))))))
         (insert " xsi:nil=\"true\">"))
@@ -1037,7 +1046,7 @@ This is because it is easier to work with list results in LISP."
   (put (aref (make-soap-array-type) 0)
        'soap-encoder 'soap-encode-array-type))
 
-(defun soap-encode-body (operation parameters)
+(defun soap-encode-body (operation parameters wsdl)
   (let* ((op (soap-bound-operation-operation operation))
          (use (soap-bound-operation-use operation))
          (message (cdr (soap-operation-input op)))
@@ -1051,6 +1060,7 @@ This is because it is easier to work with list results in LISP."
 
     (insert "<soap:Body>\n")
     (when (eq use 'encoded)
+      (push (soap-element-namespace-tag op) *soap-encoded-namespaces*)
       (insert "<" (soap-element-fq-name op) ">\n"))
 
     (let ((param-table (loop for formal in parameter-order
@@ -1061,26 +1071,39 @@ This is because it is easier to work with list results in LISP."
                (type (cdr part))
                (tag-name (if (eq use 'encoded) 
                              param-name
-                             (soap-element-fq-name type)))
-               (value (cdr (assoc param-name param-table))))
-          (soap-encode-value tag-name type value))))
+                             (soap-element-name type)))
+               (value (cdr (assoc param-name param-table)))
+               (start-pos (point)))
+          (soap-encode-value tag-name type value)
+          (when (eq use 'literal)
+            ;; hack: add the xmlns attribute to the tag, the only way
+            ;; ASP.NET web services recognize the namespace of the
+            ;; element itself...
+            (save-excursion
+              (goto-char start-pos)
+              (when (re-search-forward " ")
+                (let* ((ns (soap-element-namespace-tag type))
+                       (namespace (cdr (assoc ns (soap-wsdl-alias-table wsdl)))))
+                  (when namespace
+                    (insert "xmlns=\"" namespace "\" ")))))))))
 
     (when (eq use 'encoded)
       (insert "</" (soap-element-fq-name op) ">\n"))
-    (insert "</soap:Body>\n")
-    (push (soap-element-namespace-tag op) *soap-encoded-namespaces*)))
+    (insert "</soap:Body>\n")))
 
 (defun soap-create-envelope (wsdl operation parameters)
   (with-temp-buffer
-    (let ((*soap-encoded-namespaces* '("xsi" "soap" "soapenc")))
+    (let ((*soap-encoded-namespaces* '("xsi" "soap" "soapenc"))
+          (use (soap-bound-operation-use operation)))
 
       ;; Create the request body
-      (soap-encode-body operation parameters)
+      (soap-encode-body operation parameters wsdl)
 
       ;; Put the envelope around the body
       (goto-char (point-min))
       (insert "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<soap:Envelope\n")
-      (insert "    soapenc:encodingStyle=\"http://schemas.xmlsoap.org/soap/encoding/\"\n")
+      (when (eq use 'encoded)
+        (insert "    soapenc:encodingStyle=\"http://schemas.xmlsoap.org/soap/encoding/\"\n"))
       (dolist (nstag (remove-duplicates *soap-encoded-namespaces* :test 'equal))
         (insert "    xmlns:" nstag "=\"")
         (let ((nsname (cdr (assoc nstag *soap-well-known-xmlns*))))
