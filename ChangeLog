@@ -1,3 +1,10 @@
+2010-05-07  Alex Harsanyi  <AlexHarsanyi@gmail.com>
+
+	* soap-client.el (soap-resolve-references-for-sequence-type):
+	resolve references for inline structures (which are not referenced
+	in the wsdl namespaces)
+	(soap-parse-sequence): intern element names
+
 2010-05-06  Alex Harsanyi  <AlexHarsanyi@gmail.com>
 
 	* soap-client.el (soap-encode-basic-type): encode an emacs style
