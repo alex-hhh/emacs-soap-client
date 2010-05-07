@@ -35,7 +35,6 @@
 (defsubst soap-warning (message &rest args)
   (display-warning 'soap-client (apply 'format message args) :warning))
 
-
 ;;;; Namespace aliases
 
 ;; XML documents with namespaces are dificult to parse because the names of
@@ -367,12 +366,16 @@ If ELEMENT has no resolver function, it is silently ignored"
       (setf (soap-sequence-type-parent type)
             (soap-wsdl-get parent wsdl))))
   (dolist (element (soap-sequence-type-elements type))
-    (when (stringp (soap-sequence-element-name element))
-      (setf (soap-sequence-element-name element)
-            (intern (soap-sequence-element-name element))))
-    (when (stringp (soap-sequence-element-type element))
-      (setf (soap-sequence-element-type element)
-            (soap-wsdl-get (soap-sequence-element-type element) wsdl)))))
+    (let ((element-type (soap-sequence-element-type element)))
+      (cond ((stringp element-type)
+             (setf (soap-sequence-element-type element)
+                   (soap-wsdl-get element-type wsdl)))
+            ((soap-element-p element-type)
+             ;; since the element already has a child element, it
+             ;; could be an inline structure. we must resolve
+             ;; references in it, because it might not be reached by
+             ;; scaning the wsdl names.
+             (soap-resolve-references-for-element element-type wsdl))))))
 
 (defun soap-resolve-references-for-array-type (type wsdl)
   (let ((element-type (soap-array-type-element-type type)))
@@ -650,7 +653,7 @@ Return a SOAP-NAMESPACE containg the elements."
               (assert (= (length type-node) 1)) ; only one complex type definition per element
               (setq type (soap-parse-complex-type (car type-node))))))
         (push (make-soap-sequence-element
-               :name name :type type :nillable? nillable? :multiple? multiple?)
+               :name (intern name) :type type :nillable? nillable? :multiple? multiple?)
               elements)))
     (nreverse elements)))
 
