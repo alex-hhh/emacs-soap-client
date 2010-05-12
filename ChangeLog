@@ -1,3 +1,10 @@
+2010-05-12  Alex Harsanyi  <AlexHarsanyi@gmail.com>
+
+	* soap-client.el (soap-invoke): check the HTTP response before
+	trying to parse the SOAP XML envelope
+	(soap-client): new defgroup
+	(soap-debug): new variable
+
 2010-05-07  Alex Harsanyi  <AlexHarsanyi@gmail.com>
 
 	* soap-client.el (soap-resolve-references-for-sequence-type):

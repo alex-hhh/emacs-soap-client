@@ -35,6 +35,10 @@
 (defsubst soap-warning (message &rest args)
   (display-warning 'soap-client (apply 'format message args) :warning))
 
+(defgroup soap-client nil
+  "Access SOAP web services from Emacs."
+  :group 'tools)
+
 ;;;; Namespace aliases
 
 ;; XML documents with namespaces are dificult to parse because the names of
@@ -1122,6 +1126,11 @@ This is because it is easier to work with list results in LISP."
 
 ;;;; invoking soap methods
 
+(defcustom soap-debug nil
+  "When t, enable some debugging facilities"
+  :type 'boolean
+  :group 'soap-client)
+
 (defun soap-invoke (wsdl service operation-name &rest parameters)
   (let ((port (find service (soap-wsdl-ports wsdl) 
                     :key 'soap-element-name :test 'equal)))
@@ -1145,13 +1154,38 @@ This is because it is easier to work with list results in LISP."
                                         (cons "SOAPAction" (soap-bound-operation-soap-action operation))
                                         (cons "Content-Type" "text/xml; charset=utf-8"))))
         (let ((buffer (url-retrieve-synchronously (soap-port-service-url port))))
-          (let ((response (car (with-current-buffer buffer
+          (condition-case err
+              (with-current-buffer buffer
+                (declare (special url-http-response-status))
+                (if (null url-http-response-status)
+                    (error "No HTTP response from server."))
+                (if (and soap-debug (> url-http-response-status 299))
+                    ;; This is a warning because some SOAP errors come
+                    ;; back with a HTTP response 500 (internal server
+                    ;; error)
+                    (warn "Error in SOAP response: HTTP code %s" url-http-response-status))
                                  (when (> (buffer-size) 1000000)
                                    (soap-warning "Received large message: %s bytes" (buffer-size)))
-                                 (xml-parse-region (point-min) (point-max))))))
+                (let ((mime-part (mm-dissect-buffer t t)))
+                  (unless mime-part
+                    (error "Failed to decode response from server"))
+                  (unless (equal (car (mm-handle-type mime-part)) "text/xml")
+                    (error "Server response is not an XML document"))
+                  (with-temp-buffer 
+                    (mm-insert-part mime-part)
+                    (let ((response (car (xml-parse-region (point-min) (point-max)))))
             (prog1
                 (soap-parse-envelope response operation wsdl)
-              (kill-buffer buffer))))))))
+                        (kill-buffer buffer))))))
+            (soap-error
+             ;; Propagate soap-errors -- they are error replies of the
+             ;; SOAP protocol and don't indicate a communication
+             ;; problem or a bug in this code.
+             (signal (car err) (cdr err)))
+            (error 
+             (when soap-debug
+               (pop-to-buffer buffer))
+             (error (error-message-string err)))))))))
   
 (provide 'soap-client)
 
