@@ -1,3 +1,9 @@
+2010-06-01  Alex Harsanyi  <AlexHarsanyi@gmail.com>
+
+	* jira2.el (jira2-user-login-name): new variable
+	(jira2-login): update jira2-user-login-name on a succesful login.
+	(jira2-issue-key, jira2-issue-owner, jira2-issue-status): new functions
+
 2010-05-12  Alex Harsanyi  <AlexHarsanyi@gmail.com>
 
 	* soap-client.el (soap-invoke): check the HTTP response before
