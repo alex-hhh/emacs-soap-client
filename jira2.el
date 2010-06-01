@@ -58,6 +58,10 @@ The default value works if JIRA is located at a hostname named
 (defvar jira2-token nil
   "JIRA token used for authentication")
 
+(defvar jira2-user-login-name nil
+  "The name of the user logged into JIRA.
+This is maintained by `jira2-login'.")
+
 (defvar jira2-wsdl nil)
 
 (defun jira2-load-wsdl ()
@@ -76,6 +80,7 @@ The default value works if JIRA is located at a hostname named
     (jira2-load-wsdl))
   (setq jira2-token 
         (car (soap-invoke jira2-wsdl "jirasoapservice-v2" "login" username password)))
+  (setq jira2-user-login-name username)
 
   ;; At this poing, soap-invoke didn't raise an error, so the login
   ;; credentials are OK.  use them to log into the web interface as
@@ -345,4 +350,20 @@ installation can define its own link types."
                       url-http-response-status)))
            (kill-buffer buffer))))))
 
+
+;................................................ issue field accessors ....
+
+(defun jira2-issue-key (issue)
+  "Return the key of ISSUE."
+  (cdr (assoc 'key issue)))
+
+(defun jira2-issue-owner (issue)
+  "Return the owner of ISSUE."
+  (cdr (assq 'assignee issue)))
+
+(defun jira2-issue-status (issue)
+  "Return the status of ISSUE as a status string (not as a number!)"
+  (let ((status-code (cdr (assq 'status issue))))
+    (cdr (assoc status-code (jira2-get-statuses)))))
+  
 (provide 'jira2)
