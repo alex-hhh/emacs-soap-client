@@ -333,12 +333,15 @@ installation can define its own link types."
                        (format "linkDesc=%s&linkKey=%s&id=%s&Link=Link" 
                                link-type other-issue-key (cdr (assq 'id issue))))))
       (let ((url-request-method "POST")
-           (url-package-name "Emacs scratch.el")
-           (url-package-version "1.0")
-           (url-mime-charset-string "utf-8;q=1, iso-8859-1;q=0.5")
-           (url-request-data "abc")
-           (url-request-coding-system 'utf-8)
-           (url-http-attempt-keepalives t))
+            (url-package-name "Emacs scratch.el")
+            (url-package-version "1.0")
+            (url-mime-charset-string "utf-8;q=1, iso-8859-1;q=0.5")
+            (url-request-data "abc")
+            (url-request-coding-system 'utf-8)
+            (url-http-attempt-keepalives t)
+            ;; see http://confluence.atlassian.com/display/JIRA/Form+Token+Handling
+            (url-request-extra-headers '(("X-Atlassian-Token" . "no-check"))))
+
        (let ((buffer (url-retrieve-synchronously url)))
         ;; This is just a basic check that the page was retrieved
          ;; correctly.  No error does not indicate a success as we
