@@ -1,3 +1,8 @@
+2010-10-10  Alex Harsanyi  <AlexHarsanyi@gmail.com>
+
+	* jira2.el (jira2-link-issue): add the "X-Atlassian-Token" header
+	to the HTTP request.
+
 2010-06-01  Alex Harsanyi  <AlexHarsanyi@gmail.com>
 
 	* jira2.el (jira2-user-login-name): new variable
