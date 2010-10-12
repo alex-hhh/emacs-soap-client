@@ -68,9 +68,15 @@ Names in this namespace will be unqualified.  This is a
 dynamically bound variable, controlled by
 `soap-with-local-xmlns'")
 
-(defun soap-wk2l (wk-name)
-  "Return local variant of the well known name WK-NAME."
-  (let ((wk-name-1 (if (symbolp wk-name) (symbol-name wk-name) wk-name)))
+(defun soap-wk2l (well-known-name)
+  "Return local variant of WELL-KNOWN-NAME.
+This is done by looking up the namespace in the
+`*soap-well-known-xmlns*' table and resolving the namespace to
+the local name based on the current local translation tabble
+`*soap-local-xmlns*'.  See also `soap-with-local-xmlns'."
+  (let ((wk-name-1 (if (symbolp well-known-name) 
+                       (symbol-name well-known-name) 
+                       well-known-name)))
     (cond
       ((string-match "^\\(.*\\):\\(.*\\)$" wk-name-1)
        (let ((ns (match-string 1 wk-name-1))
@@ -78,21 +84,20 @@ dynamically bound variable, controlled by
          (let ((namespace (cdr (assoc ns *soap-well-known-xmlns*))))
            (cond ((equal namespace *soap-default-xmlns*)
                   ;; Name is unqualified in the default namespace
-                  (if (symbolp wk-name)
+                  (if (symbolp well-known-name)
                       (intern name)
                       name))
                  (t
                   (let* ((local-ns (car (rassoc namespace *soap-local-xmlns*)))
                          (local-name (concat local-ns ":" name)))
-                    (if (symbolp wk-name)
+                    (if (symbolp well-known-name)
                         (intern local-name)
                         local-name)))))))
-          (t wk-name))))
+          (t well-known-name))))
 
 (defun soap-extract-xmlns (node &optional xmlns-table)
   "Return an alias table for the xml NODE by extending XMLNS-TABLE."
-  (let ((xmlns xmlns-table)
-        (default-ns nil))
+  (let (xmlns default-ns)
     (dolist (a (xml-node-attributes node))
       (let ((name (symbol-name (car a)))
             (value (cdr a)))
@@ -100,7 +105,15 @@ dynamically bound variable, controlled by
                (setq default-ns value))
               ((string-match "^xmlns:\\(.*\\)$" name)
                (push (cons (match-string 1 name) value) xmlns)))))
-    (cons default-ns xmlns)))
+    (unless (assoc "tns" xmlns)
+      ;; a tns alias was not defined in this node.  See if the node
+      ;; has a "targetNamespace" attribute and add an alias to this.
+      ;; Note that we might override an existing tns alias in
+      ;; XMLNS-TABLE, but that is intended.
+      (let ((tns (xml-get-attribute-or-nil node 'targetNamespace)))
+        (when tns
+          (push (cons "tns" tns) xmlns))))
+    (cons default-ns (append xmlns xmlns-table))))
 
 (defmacro soap-with-local-xmlns (node &rest body)
   "Install a local alias table from NODE and execute BODY."
