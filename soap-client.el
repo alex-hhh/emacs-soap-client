@@ -260,6 +260,15 @@ binding) but the same name."
        ns))
     ns))
 
+(defun soap-default-soapenc-types ()
+  "Return a namespace containing some of the SOAPEnc types."
+  (let ((ns (make-soap-namespace :name "http://schemas.xmlsoap.org/soap/encoding/")))
+    (dolist (type '("string" "dateTime" "boolean" "long" "int" "anyType"))
+      (soap-namespace-put
+       (make-soap-basic-type :name type :kind (intern type))
+       ns))
+    ns))
+
 ;;;;; The WSDL document
 
 ;; The WSDL data structure used for encoding/decoding SOAP messages
@@ -553,6 +562,11 @@ If ELEMENT has no resolver function, it is silently ignored"
       (let ((ns (soap-default-xsd-types)))
         (soap-wsdl-add-namespace ns wsdl)
         (soap-wsdl-add-alias "xsd" (soap-namespace-name ns) wsdl))
+
+      ;; Add the soapenc types to the wsdl document
+      (let ((ns (soap-default-soapenc-types)))
+        (soap-wsdl-add-namespace ns wsdl)
+        (soap-wsdl-add-alias "soapenc" (soap-namespace-name ns) wsdl))
 
       ;; Find all the 'xsd:schema nodes which are children of wsdl:types nodes
       ;; and build our type-library
