@@ -254,7 +254,7 @@ binding) but the same name."
 (defun soap-default-xsd-types ()
   "Return a namespace containing some of the XMLSchema types."
   (let ((ns (make-soap-namespace :name "http://www.w3.org/2001/XMLSchema")))
-    (dolist (type '("string" "dateTime" "boolean" "long" "int" "anyType"))
+    (dolist (type '("string" "dateTime" "boolean" "long" "int" "base64Binary" "anyType"))
       (soap-namespace-put
        (make-soap-basic-type :name type :kind (intern type))
        ns))
@@ -263,7 +263,7 @@ binding) but the same name."
 (defun soap-default-soapenc-types ()
   "Return a namespace containing some of the SOAPEnc types."
   (let ((ns (make-soap-namespace :name "http://schemas.xmlsoap.org/soap/encoding/")))
-    (dolist (type '("string" "dateTime" "boolean" "long" "int" "anyType"))
+    (dolist (type '("string" "dateTime" "boolean" "long" "int" "base64Binary" "anyType"))
       (soap-namespace-put
        (make-soap-basic-type :name type :kind (intern type))
        ns))
@@ -829,6 +829,7 @@ Return a SOAP-NAMESPACE containg the elements."
 
 (defvar *soap-multi-refs*)
 (defvar *soap-decoded-multi-refs*)
+(defvar *current-wsdl*)
 
 (defun soap-decode-type (type node)
   (let ((href (xml-get-attribute-or-nil node 'href)))
@@ -859,18 +860,41 @@ Return a SOAP-NAMESPACE containg the elements."
                  (let ((decoder (get (aref type 0) 'soap-decoder)))
                    (funcall decoder type node))))))))
 
+(defun soap-decode-any-type (node)
+  ;; Let's see if the NODE itself has a more specific type.
+  (let ((type (xml-get-attribute-or-nil node (soap-wk2l 'xsi:type))))
+    (if type
+        (let ((wtype (soap-wsdl-get type wsdl)))
+          (if wtype
+              (soap-decode-type wtype node)
+              node))
+        ;; we assume the NODE is a sequence with every element a structure
+        ;; name
+        (let (result)
+          (dolist (element (xml-node-children node))
+            (let ((key (xml-node-name element))
+                  (value (soap-decode-any-type element)))
+              (push (cons key value) result)))
+          (nreverse result)))))
+
 (defun soap-decode-basic-type (type node)
-  (let ((contents (xml-node-children node)))
-    (assert (<= (length contents) 1))
-    (setq contents (car-safe contents))
+  (let ((contents (xml-node-children node))
+        (type-kind (soap-basic-type-kind type)))
+    ;; (assert (<= (length contents) 1))
+
+    (unless (eq type-kind 'anyType)
+      (setq contents (car-safe contents)))
+
     (if (null contents)
         nil
-        (assert (stringp contents))
-        (ecase (soap-basic-type-kind type)
+        ;; (assert (stringp contents))
+        (ecase type-kind
           (string contents)
           (dateTime contents)              ; TODO: convert to a date time
           ((long int) (string-to-number contents))
-          (boolean (string= (downcase contents) "true"))))))
+          (boolean (string= (downcase contents) "true"))
+          (base64Binary (base64-decode-string contents))
+          (anyType (soap-decode-any-type node))))))
 
 (defun soap-decode-sequence-type (type node)
   (let ((result nil)
@@ -948,7 +972,8 @@ This is because it is easier to work with list results in LISP."
         (soap-parse-response response operation wsdl body)))))
 
 (defun soap-parse-response (response-node operation wsdl soap-body)
-  (let* ((op (soap-bound-operation-operation operation))
+  (let* ((*current-wsdl* wsdl)
+         (op (soap-bound-operation-operation operation))
          (use (soap-bound-operation-use operation))
          (message (cdr (soap-operation-output op))))
 
