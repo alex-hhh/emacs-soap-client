@@ -864,7 +864,7 @@ Return a SOAP-NAMESPACE containg the elements."
   ;; Let's see if the NODE itself has a more specific type.
   (let ((type (xml-get-attribute-or-nil node (soap-wk2l 'xsi:type))))
     (if type
-        (let ((wtype (soap-wsdl-get type wsdl)))
+        (let ((wtype (soap-wsdl-get type *current-wsdl*)))
           (if wtype
               (soap-decode-type wtype node)
               node))
