@@ -74,8 +74,8 @@ This is done by looking up the namespace in the
 `*soap-well-known-xmlns*' table and resolving the namespace to
 the local name based on the current local translation tabble
 `*soap-local-xmlns*'.  See also `soap-with-local-xmlns'."
-  (let ((wk-name-1 (if (symbolp well-known-name) 
-                       (symbol-name well-known-name) 
+  (let ((wk-name-1 (if (symbolp well-known-name)
+                       (symbol-name well-known-name)
                        well-known-name)))
     (cond
       ((string-match "^\\(.*\\):\\(.*\\)$" wk-name-1)
@@ -320,7 +320,7 @@ used to resolve the namespace alias."
                  (unless ns
                    (error "Unknown namespace: %s, refered by alias %s"
                           namespace ns-alias))
-                 (let ((element (soap-namespace-get name ns 
+                 (let ((element (soap-namespace-get name ns
                                                     (if predicate
                                                         (lambda (e)
                                                           (or (funcall 'soap-namespace-link-p e)
@@ -351,7 +351,7 @@ This function will only work inside the body of a
         (t
          (setq name l-name-1)))
 
-      (let ((namespace 
+      (let ((namespace
              (cond (ns (cdr (assoc ns *soap-local-xmlns*)))
                    (t *soap-default-xmlns*))))
 
@@ -448,7 +448,7 @@ If ELEMENT has no resolver function, it is silently ignored"
 
   (if (= (length (soap-operation-parameter-order operation)) 0)
       (setf (soap-operation-parameter-order operation)
-            (mapcar 'car (soap-message-parts 
+            (mapcar 'car (soap-message-parts
                           (cdr (soap-operation-input operation))))))
 
   (setf (soap-operation-parameter-order operation)
@@ -535,7 +535,7 @@ If ELEMENT has no resolver function, it is silently ignored"
             (error "Failed to decode response from server"))
           (unless (equal (car (mm-handle-type mime-part)) "text/xml")
             (error "Server response is not an XML document"))
-          (with-temp-buffer 
+          (with-temp-buffer
             (mm-insert-part mime-part)
             (let ((wsdl-xml (car (xml-parse-region (point-min) (point-max)))))
               (prog1
@@ -600,7 +600,7 @@ If ELEMENT has no resolver function, it is silently ignored"
                   (binding (xml-get-attribute node 'binding))
                   (url (let ((n (car (xml-get-children node (soap-wk2l 'wsdlsoap:address)))))
                          (xml-get-attribute n 'location))))
-              (let ((port (make-soap-port 
+              (let ((port (make-soap-port
                            :name name :binding binding :service-url url)))
                 (soap-namespace-put port ns)
                 (push port (soap-wsdl-ports wsdl))))))
@@ -797,7 +797,7 @@ Return a SOAP-NAMESPACE containg the elements."
     (let ((binding (make-soap-binding :name name :port-type type)))
       (dolist (wo (xml-get-children node (soap-wk2l 'wsdl:operation)))
         (let ((name (xml-get-attribute wo 'name))
-              soap-action 
+              soap-action
               use)
           (dolist (so (xml-get-children wo (soap-wk2l 'wsdlsoap:operation)))
             (setq soap-action (xml-get-attribute-or-nil so 'soapAction)))
@@ -970,7 +970,7 @@ This is because it is easier to work with list results in LISP."
           (let ((tag (car part))
                 (type (cdr part))
                 node)
-            
+
             (cond ((eq use 'encoded)
                    (setq node (car (xml-get-children response-node tag))))
                   ((eq use 'literal)
@@ -990,17 +990,32 @@ This is because it is easier to work with list results in LISP."
 
 ;;;; SOAP type encoding
 
-(defvar *soap-encoded-namespaces*)
+(defvar *soap-encoded-namespaces* nil
+  "A list of namespace tags used during encoding a message.
+This list is populated by `soap-encode-value' and used by
+`soap-create-envelope' to add aliases for these namespace to the
+XML request.
 
-(defun soap-encode-value (param-name type value)
+This variable is dynamically bound in `soap-create-envelope'.")
+
+(defun soap-encode-value (xml-tag value type)
+  "Encode inside an XML-TAG the VALUE using TYPE.
+TYPE is one of the soap-*-type structures which defines how VALUE
+is to be encoded.  
+
+This is a generic function which finds an encoder function based
+on TYPE and calls that encoder to do the work."
   (let ((encoder (get (aref type 0) 'soap-encoder)))
     (assert encoder)
-    (funcall encoder param-name type value))
+    ;; XML-TAG can be a string or a symbol, but we pass only string's to the
+    ;; encoders
+    (when (symbolp xml-tag)
+      (setq xml-tag (symbol-name xml-tag)))
+    (funcall encoder xml-tag value type))
   (push (soap-element-namespace-tag type) *soap-encoded-namespaces*))
 
-(defun soap-encode-basic-type (param-name type value)
-  (let ((xml-tag  (symbol-name param-name))
-        (xsi-type (soap-element-fq-name type)))
+(defun soap-encode-basic-type (xml-tag value type)
+  (let ((xsi-type (soap-element-fq-name type)))
     (insert "<" xml-tag " xsi:type=\"" xsi-type "\"")
     (if value
         (progn
@@ -1021,9 +1036,8 @@ This is because it is easier to work with list results in LISP."
         (insert " xsi:nil=\"true\">"))
     (insert "</" xml-tag ">\n")))
 
-(defun soap-encode-sequence-type (param-name type value)
-  (let ((xml-tag  (if (symbolp param-name) (symbol-name param-name) param-name))
-        (xsi-type (soap-element-fq-name type)))
+(defun soap-encode-sequence-type (xml-tag value type)
+  (let ((xsi-type (soap-element-fq-name type)))
     (insert "<" xml-tag " xsi:type=\"" xsi-type "\"")
     (if value
         (progn
@@ -1034,7 +1048,7 @@ This is because it is easier to work with list results in LISP."
             (while parent
               (push parent parents)
               (setq parent (soap-sequence-type-parent parent)))
-            
+
             (dolist (type parents)
               (dolist (element (soap-sequence-type-elements type))
                 (let ((instance-count 0)
@@ -1043,7 +1057,7 @@ This is because it is easier to work with list results in LISP."
                   (dolist (v value)
                     (when (equal (car v) e-name)
                       (incf instance-count)
-                      (soap-encode-value e-name e-type (cdr v))))
+                      (soap-encode-value e-name (cdr v) e-type)))
 
                   ;; Do some sanity checking
                   (cond ((and (= instance-count 0)
@@ -1057,19 +1071,18 @@ This is because it is easier to work with list results in LISP."
         (insert " xsi:nil=\"true\">"))
     (insert "</" xml-tag ">\n")))
 
-(defun soap-encode-array-type (param-name type value)
+(defun soap-encode-array-type (xml-tag value type)
   (unless (vectorp value)
-    (error "soap-encode: %s(%s) expects a vector, got: %s" 
-           param-name (soap-element-fq-name type) value))
-  (let* ((xml-tag  (symbol-name param-name))
-         (element-type (soap-array-type-element-type type))
+    (error "soap-encode: %s(%s) expects a vector, got: %s"
+           xml-tag (soap-element-fq-name type) value))
+  (let* ((element-type (soap-array-type-element-type type))
          (array-type (concat (soap-element-fq-name element-type)
                              "[" (format "%s" (length value)) "]")))
     (insert "<" xml-tag
             " soapenc:arrayType=\"" array-type "\" "
             " xsi:type=\"soapenc:Array\">\n")
     (loop for i below (length value)
-         do (soap-encode-value param-name element-type (aref value i)))
+         do (soap-encode-value xml-tag (aref value i) element-type))
     (insert "</" xml-tag ">\n")))
 
 (progn
@@ -1103,12 +1116,12 @@ This is because it is easier to work with list results in LISP."
       (dolist (part (soap-message-parts message))
         (let* ((param-name (car part))
                (type (cdr part))
-               (tag-name (if (eq use 'encoded) 
+               (tag-name (if (eq use 'encoded)
                              param-name
                              (soap-element-name type)))
                (value (cdr (assoc param-name param-table)))
                (start-pos (point)))
-          (soap-encode-value tag-name type value)
+          (soap-encode-value tag-name value type)
           (when (eq use 'literal)
             ;; hack: add the xmlns attribute to the tag, the only way
             ;; ASP.NET web services recognize the namespace of the
@@ -1159,16 +1172,16 @@ This is because it is easier to work with list results in LISP."
   :group 'soap-client)
 
 (defun soap-invoke (wsdl service operation-name &rest parameters)
-  (let ((port (find service (soap-wsdl-ports wsdl) 
+  (let ((port (find service (soap-wsdl-ports wsdl)
                     :key 'soap-element-name :test 'equal)))
     (unless port
       (error "Unknown SOAP service: %s" service))
-    
+
     (let* ((binding (soap-port-binding port))
            (operation (gethash operation-name (soap-binding-operations binding))))
       (unless operation
         (error "No operation %s for SOAP service %s" operation-name service))
-    
+
       (let ((url-request-method "POST")
             (url-package-name "esoap.el")
             (url-package-version "1.0")
@@ -1198,7 +1211,7 @@ This is because it is easier to work with list results in LISP."
                     (error "Failed to decode response from server"))
                   (unless (equal (car (mm-handle-type mime-part)) "text/xml")
                     (error "Server response is not an XML document"))
-                  (with-temp-buffer 
+                  (with-temp-buffer
                     (mm-insert-part mime-part)
                     (let ((response (car (xml-parse-region (point-min) (point-max)))))
             (prog1
@@ -1209,11 +1222,11 @@ This is because it is easier to work with list results in LISP."
              ;; SOAP protocol and don't indicate a communication
              ;; problem or a bug in this code.
              (signal (car err) (cdr err)))
-            (error 
+            (error
              (when soap-debug
                (pop-to-buffer buffer))
              (error (error-message-string err)))))))))
-  
+
 (provide 'soap-client)
 
 
