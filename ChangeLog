@@ -5,6 +5,7 @@
 	(soap-decode-any-type): new defun
 	(soap-decode-basic-type): decode anyType nodes and base64Binary
 	(soap-parse-response): bind the wsdl to *current-wsdl*
+	(soap-decode-any-type): use *current-wsdl*
 
 2010-10-15  Alex Harsanyi  <AlexHarsanyi@gmail.com>
 
