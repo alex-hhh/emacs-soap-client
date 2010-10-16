@@ -1,3 +1,8 @@
+2010-10-16  Alexandru Harsanyi  <AlexHarsanyi@gmail.com>
+
+	* soap-client.el (soap-decode-any-type, soap-decode-array): decode
+	arrays of anyType values.
+
 2010-10-15  Alexandru Harsanyi  <AlexHarsanyi@gmail.com>
 
 	* soap-client.el (soap-default-xsd-types)
