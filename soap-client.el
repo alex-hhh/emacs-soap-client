@@ -254,7 +254,8 @@ binding) but the same name."
 (defun soap-default-xsd-types ()
   "Return a namespace containing some of the XMLSchema types."
   (let ((ns (make-soap-namespace :name "http://www.w3.org/2001/XMLSchema")))
-    (dolist (type '("string" "dateTime" "boolean" "long" "int" "base64Binary" "anyType"))
+    (dolist (type '("string" "dateTime" "boolean" "long" "int" 
+                    "base64Binary" "anyType" "Array"))
       (soap-namespace-put
        (make-soap-basic-type :name type :kind (intern type))
        ns))
@@ -263,7 +264,8 @@ binding) but the same name."
 (defun soap-default-soapenc-types ()
   "Return a namespace containing some of the SOAPEnc types."
   (let ((ns (make-soap-namespace :name "http://schemas.xmlsoap.org/soap/encoding/")))
-    (dolist (type '("string" "dateTime" "boolean" "long" "int" "base64Binary" "anyType"))
+    (dolist (type '("string" "dateTime" "boolean" "long" "int" 
+                    "base64Binary" "anyType" "Array"))
       (soap-namespace-put
        (make-soap-basic-type :name type :kind (intern type))
        ns))
@@ -861,40 +863,70 @@ Return a SOAP-NAMESPACE containg the elements."
                    (funcall decoder type node))))))))
 
 (defun soap-decode-any-type (node)
-  ;; Let's see if the NODE itself has a more specific type.
+  "Decode NODE using type information inside it."
+  ;; If the NODE has type information, we use that...
   (let ((type (xml-get-attribute-or-nil node (soap-wk2l 'xsi:type))))
     (if type
         (let ((wtype (soap-wsdl-get type *current-wsdl*)))
           (if wtype
               (soap-decode-type wtype node)
-              node))
-        ;; we assume the NODE is a sequence with every element a structure
-        ;; name
-        (let (result)
-          (dolist (element (xml-node-children node))
-            (let ((key (xml-node-name element))
-                  (value (soap-decode-any-type element)))
-              (push (cons key value) result)))
-          (nreverse result)))))
+              ;; The node has type info encoded in it, but we don't know how
+              ;; to decode it...
+              (error "soap-decode-any-type: node has unknown type: %s" type)))
+
+        ;; No type info in the node...
+
+        (let ((contents (xml-node-children node)))
+          (if (and (= (length contents) 1) (stringp (car contents)))
+              ;; contents is just a string
+              (car contents)
+
+              ;; we assume the NODE is a sequence with every element a
+              ;; structure name
+              (let (result)
+                (dolist (element contents)
+                  (let ((key (xml-node-name element))
+                        (value (soap-decode-any-type element)))
+                    (push (cons key value) result)))
+                (nreverse result)))))))
+
+(defun soap-decode-array (node)
+  "Decode NODE as an Array using type information inside it."
+  (let ((type (xml-get-attribute-or-nil node (soap-wk2l 'soapenc:arrayType)))
+        (wtype nil)
+        (contents (xml-node-children node))
+        result)
+    (when type
+        ;; Type is in the format "someType[NUM]" where NUM is the number of
+        ;; elements in the array.  We discard the [NUM] part.
+        (setq type (replace-regexp-in-string "\\[[0-9]+\\]\\'" "" type))
+        (setq wtype (soap-wsdl-get type *current-wsdl*))
+        (unless wtype
+          ;; The node has type info encoded in it, but we don't know how to
+          ;; decode it...
+          (error "soap-decode-array: node has unknown type: %s" type)))
+    (dolist (e contents)
+      (when (consp e)
+        (push (if wtype
+                  (soap-decode-type wtype node)
+                  (soap-decode-any-type node))
+              result)))
+    (nreverse result)))
 
 (defun soap-decode-basic-type (type node)
   (let ((contents (xml-node-children node))
         (type-kind (soap-basic-type-kind type)))
-    ;; (assert (<= (length contents) 1))
-
-    (unless (eq type-kind 'anyType)
-      (setq contents (car-safe contents)))
 
     (if (null contents)
         nil
-        ;; (assert (stringp contents))
         (ecase type-kind
-          (string contents)
-          (dateTime contents)              ; TODO: convert to a date time
-          ((long int) (string-to-number contents))
-          (boolean (string= (downcase contents) "true"))
-          (base64Binary (base64-decode-string contents))
-          (anyType (soap-decode-any-type node))))))
+          (string (car contents))
+          (dateTime (car contents))     ; TODO: convert to a date time
+          ((long int) (string-to-number (car contents)))
+          (boolean (string= (downcase (car contents)) "true"))
+          (base64Binary (base64-decode-string (car contents)))
+          (anyType (soap-decode-any-type node))
+          (Array (soap-decode-array node))))))
 
 (defun soap-decode-sequence-type (type node)
   (let ((result nil)
