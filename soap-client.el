@@ -1316,9 +1316,10 @@ on TYPE and calls that encoder to do the work."
                   (with-temp-buffer
                     (mm-insert-part mime-part)
                     (let ((response (car (xml-parse-region (point-min) (point-max)))))
-            (prog1
-                (soap-parse-envelope response operation wsdl)
-                        (kill-buffer buffer))))))
+                      (prog1
+                          (soap-parse-envelope response operation wsdl)
+                        (kill-buffer buffer)
+                        (mm-destroy-part mime-part))))))
             (soap-error
              ;; Propagate soap-errors -- they are error replies of the
              ;; SOAP protocol and don't indicate a communication
