@@ -1,0 +1,173 @@
+2010-10-19  Alex Harsanyi  <AlexHarsanyi@gmail.com>
+
+	* soap-client.el (soap-invoke): call `mm-destroy-part' on the HTTP
+	response to avoid leaking temporary buffers.
+
+2010-10-18  Alex Harsanyi  <AlexHarsanyi@gmail.com>
+
+	* soap-client.el (soap-l2fq): new function
+	(soap-wsdl-get): accept fully qualified names + doc update
+	(soap-l2wsdl): removed
+	(soap-resolve-references-for-operation): allow unnamed message
+	parts for inputs outputs and faults.
+
+2010-10-16  Alexandru Harsanyi  <AlexHarsanyi@gmail.com>
+
+	* soap-client.el (soap-decode-any-type, soap-decode-array): decode
+	arrays of anyType values.
+
+2010-10-15  Alexandru Harsanyi  <AlexHarsanyi@gmail.com>
+
+	* soap-client.el (soap-default-xsd-types)
+	(soap-default-soapenc-types): add base64Binary basic type
+	(soap-decode-any-type): new defun
+	(soap-decode-basic-type): decode anyType nodes and base64Binary
+	(soap-parse-response): bind the wsdl to *current-wsdl*
+	(soap-decode-any-type): use *current-wsdl*
+
+2010-10-15  Alex Harsanyi  <AlexHarsanyi@gmail.com>
+
+	* soap-client.el (*soap-encoded-namespaces*): doc update
+	(soap-encode-value): ensure XML-TAG is a string before passing it
+	on to the encoders.  Also doc update and param order change.
+	(soap-encode-basic-type, soap-encode-sequence-type)
+	(soap-encode-array-type): assume XML-TAG is a string
+
+2010-10-13  Alex Harsanyi  <AlexHarsanyi@gmail.com>
+
+	* soap-client.el (soap-default-soapenc-types): new function
+	(soap-parse-wsdl): add the default types from the soapenc
+	namespace to the wsdl document.  Fixes bug #3
+
+2010-10-12  Alex Harsanyi  <AlexHarsanyi@gmail.com>
+
+	* soap-client.el (soap-extract-xmlns): if the node has a
+	targetNamespace attribute define a "tns" alias for that namespace.
+	(soap-wk2l): documentation update
+
+2010-10-10  Alex Harsanyi  <AlexHarsanyi@gmail.com>
+
+	* jira2.el (jira2-link-issue): add the "X-Atlassian-Token" header
+	to the HTTP request.
+
+2010-06-01  Alex Harsanyi  <AlexHarsanyi@gmail.com>
+
+	* jira2.el (jira2-user-login-name): new variable
+	(jira2-login): update jira2-user-login-name on a succesful login.
+	(jira2-issue-key, jira2-issue-owner, jira2-issue-status): new functions
+
+2010-05-12  Alex Harsanyi  <AlexHarsanyi@gmail.com>
+
+	* soap-client.el (soap-invoke): check the HTTP response before
+	trying to parse the SOAP XML envelope
+	(soap-client): new defgroup
+	(soap-debug): new variable
+
+2010-05-07  Alex Harsanyi  <AlexHarsanyi@gmail.com>
+
+	* soap-client.el (soap-resolve-references-for-sequence-type):
+	resolve references for inline structures (which are not referenced
+	in the wsdl namespaces)
+	(soap-parse-sequence): intern element names
+
+2010-05-06  Alex Harsanyi  <AlexHarsanyi@gmail.com>
+
+	* soap-client.el (soap-encode-basic-type): encode an emacs style
+	time value such as received by (current-time) into the xsd format.
+	(soap-encode-body): when encoding literal documents, make the
+	toplevel tags unqualified and add their namespace to the tag
+	itself
+	(soap-encode-body): add the "soapenc:encodingStyle" attribute only
+	for encoded documents.
+
+2010-05-05  Alex Harsanyi  <AlexHarsanyi@gmail.com>
+
+	* soap-client.el (soap-bound-operation): new struct
+	(soap-binding): rename soap-actions to operations
+	(soap-l2wsdl): new function
+	(soap-resolve-references-for-operation): if no parameter-order is
+	specified, construct a default one.
+	(soap-resolve-references-for-binding): resolve references in
+	bound-operations
+	(soap-parse-message): recognize the 'element attribute
+	(soap-parse-binding): extract the soap-action and use for every
+	operation in this binding.
+	(soap-parse-envelope, soap-parse-response, soap-encode-body)
+	(soap-create-envelope, soap-invoke): handle literal vs encoded
+	bodies
+	(soap-parse-response): corrected message check
+	(soap-invoke): increased buffer limit for issuing warning
+
+2010-05-04  Alex Harsanyi  <AlexHarsanyi@gmail.com>
+
+	* soap-client.el (soap-namespace-put, soap-namespace-put-link)
+	(soap-namespace-get): namespaces can now store multiple elements
+	with the same name.
+	(soap-wsdl-add-namespace, soap-wsdl-resolve-references): handle
+	multiple elements with the same name.
+	(soap-resolve-references-for-binding): request only port type
+	elements.
+	(soap-resolve-references-for-port): request only binding type
+	elements.
+	(soap-parse-complex-type): look for a name in an attribute tag
+	(soap-wsdl-get): use a PREDICATE argument to specify the type of
+	element requested. All callers updated.
+	(soap-parse-sequence): accept elements that have inline
+	complexType definitions.
+	(soap-default-xsd-types): use the
+	"http://www.w3.org/2001/XMLSchema" as XMLSchema.
+	(soap-parse-schema): parse toplevel element tags
+	(soap-parse-schema-element): new function
+	(soap-parse-complex-type): handle empty complex types
+	(soap-parse-sequence): make an element nillable if its minOccurs
+	is 0
+	(soap-binding): add a soap-actions member
+	(soap-parse-sequence): an element with 0 minOccurs is nillable
+	(soap-parse-binding): new function
+
+2010-04-30  Alex Harsanyi  <AlexHarsanyi@gmail.com>
+
+	* jira2.el (jira2-login): bugfix: pass username and password to
+	the jira web login page.
+	(jira2-login, jira2-link-issue): add basic check that the URL
+	response is OK.
+	(jira2-login, jira2-link-issue): `url-http-response-status' is
+	only bound in the response buffer
+
+2010-04-22  Alex Harsanyi  <AlexHarsanyi@gmail.com>
+
+	* jira2.el (jira2-token): new variable
+	(jira2-login): login into the jira web application as well.
+	(jira2-link-issue): new function, uses JIRA web interface instead
+	of the SOAP api
+
+2010-03-31  Alexandru Harsanyi  <AlexHarsanyi@gmail.com>
+
+	* jira2.el (jira2-add-worklog-and-autoadjust-remaining-estimate):
+	New function (patch by arvid.jakobsson).
+
+2010-03-31  Alex Harsanyi  <AlexHarsanyi@gmail.com>
+
+	* soap-client.el (soap-load-wsdl-from-url): check that we have
+	retrieved an XML document before passing it to `xml-parse-region'
+
+2010-02-11  Alex Harsanyi  <AlexHarsanyi@gmail.com>
+
+	* jira2.el (jira2-do-jql-search, jira2-get-available-actions)
+	(jira2-get-fields-for-action, jira2-progress-workflow-action): new
+	functions.
+
+2009-12-14  Alex Harsanyi  <AlexHarsanyi@gmail.com>
+
+	* jira2.el (jira2-wsdl-descriptor-url): add type and group to
+	defcustom
+
+2009-12-07  Alex Harsanyi  <AlexHarsanyi@gmail.com>
+
+	* jira2.el (jira2-update-issue)
+	(jira2-create-issue): use car on the jira call result
+
+	* soap-client.el (soap-encode-basic-type): use
+	`url-insert-entities-in-string` when inserting the user data into
+	the message
+
