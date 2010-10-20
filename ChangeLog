@@ -1,3 +1,11 @@
+2010-10-20  Alexandru Harsanyi  <AlexHarsanyi@gmail.com>
+
+	* soap-client.el (soap-type-p): new function
+	(soap-resolve-references-for-sequence-type)
+	(soap-resolve-references-for-array-type)
+	(soap-resolve-references-for-message, soap-decode-array): use it
+	when calling `soap-wsdl-get'
+
 2010-10-18  Alex Harsanyi  <AlexHarsanyi@gmail.com>
 
 	* soap-client.el (soap-l2fq): new function
