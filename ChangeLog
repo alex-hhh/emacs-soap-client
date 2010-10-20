@@ -1,5 +1,10 @@
 2010-10-19  Alex Harsanyi  <AlexHarsanyi@gmail.com>
 
+	* soap-client.el (soap-type-p): new function
+	(soap-resolve-references-for-sequence-type)
+	(soap-resolve-references-for-array-type)
+	(soap-resolve-references-for-message, soap-decode-array): use it
+	when calling `soap-wsdl-get'
 	* soap-client.el (soap-invoke): call `mm-destroy-part' on the HTTP
 	response to avoid leaking temporary buffers.
 

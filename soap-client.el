@@ -293,6 +293,13 @@ binding) but the same name."
        ns))
     ns))
 
+(defun soap-type-p (element)
+  "Return t if ELEMENT is a SOAP datatype (basic or complex)"
+  (or (soap-basic-type-p element)
+      (soap-sequence-type-p element)
+      (soap-array-type-p element)))
+      
+
 ;;;;; The WSDL document
 
 ;; The WSDL data structure used for encoding/decoding SOAP messages
@@ -407,12 +414,12 @@ If ELEMENT has no resolver function, it is silently ignored"
   (let ((parent (soap-sequence-type-parent type)))
     (when (or (consp parent) (stringp parent))
       (setf (soap-sequence-type-parent type)
-            (soap-wsdl-get parent wsdl))))
+            (soap-wsdl-get parent wsdl 'soap-type-p))))
   (dolist (element (soap-sequence-type-elements type))
     (let ((element-type (soap-sequence-element-type element)))
       (cond ((or (consp element-type) (stringp element-type))
              (setf (soap-sequence-element-type element)
-                   (soap-wsdl-get element-type wsdl)))
+                   (soap-wsdl-get element-type wsdl 'soap-type-p)))
             ((soap-element-p element-type)
              ;; since the element already has a child element, it
              ;; could be an inline structure. we must resolve
@@ -424,7 +431,7 @@ If ELEMENT has no resolver function, it is silently ignored"
   (let ((element-type (soap-array-type-element-type type)))
     (when (or (consp element-type) (stringp element-type))
       (setf (soap-array-type-element-type type)
-            (soap-wsdl-get element-type wsdl)))))
+            (soap-wsdl-get element-type wsdl 'soap-type-p)))))
 
 (defun soap-resolve-references-for-message (message wsdl)
   (let (resolved-parts)
@@ -434,7 +441,7 @@ If ELEMENT has no resolver function, it is silently ignored"
         (when (stringp name)
           (setq name (intern name)))
         (when (or (consp type) (stringp type))
-          (setq type (soap-wsdl-get type wsdl)))
+          (setq type (soap-wsdl-get type wsdl 'soap-type-p)))
         (push (cons name type) resolved-parts)))
      (setf (soap-message-parts message) (nreverse resolved-parts))))
 
@@ -908,7 +915,7 @@ Return a SOAP-NAMESPACE containg the elements."
   ;; If the NODE has type information, we use that...
   (let ((type (xml-get-attribute-or-nil node (soap-wk2l 'xsi:type))))
     (if type
-        (let ((wtype (soap-wsdl-get type *current-wsdl*)))
+        (let ((wtype (soap-wsdl-get type *current-wsdl* 'soap-type-p)))
           (if wtype
               (soap-decode-type wtype node)
               ;; The node has type info encoded in it, but we don't know how
@@ -941,7 +948,7 @@ Return a SOAP-NAMESPACE containg the elements."
         ;; Type is in the format "someType[NUM]" where NUM is the number of
         ;; elements in the array.  We discard the [NUM] part.
         (setq type (replace-regexp-in-string "\\[[0-9]+\\]\\'" "" type))
-        (setq wtype (soap-wsdl-get type *current-wsdl*))
+        (setq wtype (soap-wsdl-get type *current-wsdl* 'soap-type-p))
         (unless wtype
           ;; The node has type info encoded in it, but we don't know how to
           ;; decode it...
