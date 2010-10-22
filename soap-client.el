@@ -377,23 +377,25 @@ used to resolve the namespace alias."
                                     :test 'string=))
               (unless namespace
                (error "soap-wsdl-get(%s): unknown namespace %s, refered by alias %s" 
-                      name ns-name ns-alias)))
+                      name ns-name ns-alias))))
+          (t
+           (error "soap-wsdl-get(%s): bad name" name)))
 
-           (setq element (soap-namespace-get 
+    (setq element (soap-namespace-get 
                    element-name namespace
                    (if predicate
                        (lambda (e)
                          (or (funcall 'soap-namespace-link-p e)
                              (funcall predicate e)))
                        nil)))
-
-           (unless element
-             (error "soap-wsdl-get(%s): cannot find element" name))            
-
-           (if (soap-namespace-link-p element)
-               ;; NOTE: don't use the local alias table here
-               (soap-wsdl-get (soap-namespace-link-target element) wsdl predicate)
-               element)))))
+    
+    (unless element
+      (error "soap-wsdl-get(%s): cannot find element" name))            
+    
+    (if (soap-namespace-link-p element)
+        ;; NOTE: don't use the local alias table here
+        (soap-wsdl-get (soap-namespace-link-target element) wsdl predicate)
+        element)))
 
 ;;;;; Resolving references for wsdl types
 
