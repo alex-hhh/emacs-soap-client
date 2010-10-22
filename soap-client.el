@@ -113,7 +113,7 @@ different namespace aliases for the same element."
              (let ((namespace (cdr (assoc ns *soap-local-xmlns*))))
                (if namespace
                    (cons namespace name)
-                   (error "soap-l2fq: unknown alias %s" ns)))))
+                   (error "soap-l2fq(%s): unknown alias %s" local-name ns)))))
           (t
            (cons *soap-default-xmlns* local-name)))))
 
@@ -215,11 +215,12 @@ If multiple elements with the same name exist,
 DISCRIMNINANT-PREDICATE is used to pick one of them.  This allows
 storing elements of different types (like a message type and a
 binding) but the same name."
+  (assert (stringp name))
   (let ((e (gethash name (soap-namespace-elements ns))))
     (cond (discrimninant-predicate (find-if discrimninant-predicate e))
           ((= (length e) 1) (car e))
           ((> (length e) 1)
-           (error "Multiple elements named %s, discriminant needed" name))
+           (error "soap-namespace-get(%s): multiple elements, discriminant needed" name))
           (t
            nil))))
 
@@ -277,7 +278,7 @@ binding) but the same name."
   "Return a namespace containing some of the XMLSchema types."
   (let ((ns (make-soap-namespace :name "http://www.w3.org/2001/XMLSchema")))
     (dolist (type '("string" "dateTime" "boolean" "long" "int" 
-                    "base64Binary" "anyType" "Array"))
+                    "base64Binary" "anyType" "Array" "byte[]"))
       (soap-namespace-put
        (make-soap-basic-type :name type :kind (intern type))
        ns))
@@ -287,7 +288,7 @@ binding) but the same name."
   "Return a namespace containing some of the SOAPEnc types."
   (let ((ns (make-soap-namespace :name "http://schemas.xmlsoap.org/soap/encoding/")))
     (dolist (type '("string" "dateTime" "boolean" "long" "int" 
-                    "base64Binary" "anyType" "Array"))
+                    "base64Binary" "anyType" "Array" "byte[]"))
       (soap-namespace-put
        (make-soap-basic-type :name type :kind (intern type))
        ns))
@@ -342,54 +343,57 @@ elements named \"foo\" exist in the WSDL you could use:
 
 If USE-LOCAL-ALIAS-TABLE is not nil, `*soap-local-xmlns*` will be
 used to resolve the namespace alias."
-  (when (symbolp name)
-    (setq name (symbol-name name)))
-  (let ((alias-table (soap-wsdl-alias-table wsdl)))
+  (let ((alias-table (soap-wsdl-alias-table wsdl))
+        namespace element-name element)
+
+    (when (symbolp name)
+      (setq name (symbol-name name)))
 
     (when use-local-alias-table
       (setq alias-table (append *soap-local-xmlns* alias-table)))
+    
+    (cond ((consp name) ; a fully qualified name, as returned by `soap-l2fq'
+           (setq element-name (cdr name))
+           (when (symbolp element-name)
+             (setq element-name (symbol-name element-name)))
+           (setq namespace (find (car name)
+                                 (soap-wsdl-namespaces wsdl)
+                                 :key 'soap-namespace-name
+                                 :test 'string=))
+           (unless namespace
+             (error "soap-wsdl-get(%s): unknown namespace: %s" name namespace)))
+          
+          ((string-match "^\\(.*\\):\\(.*\\)$" name)
+           (setq element-name (match-string 2 name))
 
-    (let (namespace element-name)
-      (cond ((consp name) ; a fully qualified name, as returned by `soap-l2fq'
-             (setq element-name (cdr name))
-             (when (symbolp element-name)
-               (setq element-name (symbol-name element-name)))
-             (setq namespace (find (car name)
-                                   (soap-wsdl-namespaces wsdl)
-                                   :key 'soap-namespace-name
-                                   :test 'string=))
-             (unless namespace
-               (error "Unknown namespace: %s" namespace)))
-
-            ((string-match "^\\(.*\\):\\(.*\\)$" name)
-             (setq element-name (match-string 2 name))
-
-             (let* ((ns-alias (match-string 1 name))
-                    (ns-name (cdr (assoc ns-alias alias-table))))
-               (unless ns-name
-                 (error "Cannot find namespace alias %s in wsdl" ns-alias))
-                 
-               (setq namespace (find ns-name
-                                     (soap-wsdl-namespaces wsdl)
-                                     :key 'soap-namespace-name
-                                     :test 'string=))
-               (unless namespace
-                 (error "Unknown namespace: %s, refered by alias %s" ns-name ns-alias))))
-
-            (t
-             (error "Cannot resolve %s" name)))
+           (let* ((ns-alias (match-string 1 name))
+                  (ns-name (cdr (assoc ns-alias alias-table))))
+             (unless ns-name
+               (error "soap-wsdl-get(%s): cannot find namespace alias %s" name ns-alias))
              
-      (let ((element (soap-namespace-get 
-                      element-name namespace
-                      (if predicate
-                          (lambda (e)
-                            (or (funcall 'soap-namespace-link-p e)
-                                (funcall predicate e)))
-                          nil))))
-        (if (soap-namespace-link-p element)
-            ;; NOTE: don't use the local alias table here
-            (soap-wsdl-get (soap-namespace-link-target element) wsdl predicate)
-            element)))))
+             (setq namespace (find ns-name
+                                    (soap-wsdl-namespaces wsdl)
+                                    :key 'soap-namespace-name
+                                    :test 'string=))
+              (unless namespace
+               (error "soap-wsdl-get(%s): unknown namespace %s, refered by alias %s" 
+                      name ns-name ns-alias)))
+
+           (setq element (soap-namespace-get 
+                   element-name namespace
+                   (if predicate
+                       (lambda (e)
+                         (or (funcall 'soap-namespace-link-p e)
+                             (funcall predicate e)))
+                       nil)))
+
+           (unless element
+             (error "soap-wsdl-get(%s): cannot find element" name))            
+
+           (if (soap-namespace-link-p element)
+               ;; NOTE: don't use the local alias table here
+               (soap-wsdl-get (soap-namespace-link-target element) wsdl predicate)
+               element)))))|
 
 ;;;;; Resolving references for wsdl types
 
