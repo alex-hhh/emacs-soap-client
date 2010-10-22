@@ -352,6 +352,8 @@ used to resolve the namespace alias."
     (let (namespace element-name)
       (cond ((consp name) ; a fully qualified name, as returned by `soap-l2fq'
              (setq element-name (cdr name))
+             (when (symbolp element-name)
+               (setq element-name (symbol-name element-name)))
              (setq namespace (find (car name)
                                    (soap-wsdl-namespaces wsdl)
                                    :key 'soap-namespace-name
