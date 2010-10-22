@@ -3,6 +3,14 @@
 	* soap-client.el (soap-wsdl-get): convert the name to a string if
 	it is a symbol (fixes Bug #5)
 
+2010-10-22  Alex Harsanyi  <AlexHarsanyi@gmail.com>
+
+	* soap-client.el (soap-l2fq, soap-namespace-get, soap-wsdl-get):
+	better error checking and reporting
+	(soap-default-xsd-types, soap-default-soapenc-types): add the
+	byte[] basic type
+
+
 2010-10-19  Alex Harsanyi  <AlexHarsanyi@gmail.com>
 
 	* soap-client.el (soap-type-p): new function
