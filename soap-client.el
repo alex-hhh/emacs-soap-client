@@ -393,7 +393,7 @@ used to resolve the namespace alias."
            (if (soap-namespace-link-p element)
                ;; NOTE: don't use the local alias table here
                (soap-wsdl-get (soap-namespace-link-target element) wsdl predicate)
-               element)))))|
+               element)))))
 
 ;;;;; Resolving references for wsdl types
 
