@@ -305,9 +305,10 @@ binding) but the same name."
 
 ;; The WSDL data structure used for encoding/decoding SOAP messages
 (defstruct soap-wsdl
-  ports                                 ; a list of SOAP-PORT instances
-  alias-table                           ; a list of namespace aliases
-  namespaces                            ; a list of namespaces
+  origin                         ; file or URL from which this wsdl was loaded
+  ports                          ; a list of SOAP-PORT instances
+  alias-table                    ; a list of namespace aliases
+  namespaces                     ; a list of namespaces
   )
 
 (defun soap-wsdl-add-alias (alias name wsdl)
@@ -583,14 +584,18 @@ If ELEMENT has no resolver function, it is silently ignored"
             (mm-insert-part mime-part)
             (let ((wsdl-xml (car (xml-parse-region (point-min) (point-max)))))
               (prog1
-                  (soap-parse-wsdl wsdl-xml)
+                  (let ((wsdl (soap-parse-wsdl wsdl-xml)))
+                    (setf (soap-wsdl-origin wsdl) url)
+                    wsdl)
                 (kill-buffer buffer)))))))))
 
 (defun soap-load-wsdl (file)
   (with-temp-buffer
     (insert-file-contents file)
     (let ((xml (car (xml-parse-region (point-min) (point-max)))))
-      (soap-parse-wsdl xml))))
+      (let ((wsdl (soap-parse-wsdl xml)))
+        (setf (soap-wsdl-origin wsdl) file)
+        wsdl))))
 
 (defun soap-parse-wsdl (node)
   (soap-with-local-xmlns node
