@@ -1,3 +1,11 @@
+2010-10-26  Alex Harsanyi  <AlexHarsanyi@gmail.com>
+
+	* soap-client.el (soap-default-xsd-types)
+	(soap-default-soapenc-types): add float basic type
+	(soap-decode-array): bugfix decode the actual child nodes of the
+	array (Bug #6)
+	(soap-decode-basic-type): recognize float type as a number
+
 2010-10-24  Alex Harsanyi  <AlexHarsanyi@gmail.com>
 
 	* soap-client.el (soap-wsdl): add origin slot
