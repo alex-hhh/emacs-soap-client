@@ -1137,24 +1137,72 @@ on TYPE and calls that encoder to do the work."
   (push (soap-element-namespace-tag type) *soap-encoded-namespaces*))
 
 (defun soap-encode-basic-type (xml-tag value type)
-  (let ((xsi-type (soap-element-fq-name type)))
+  (let ((xsi-type (soap-element-fq-name type))
+        (basic-type (soap-basic-type-kind type)))
+
+    ;; try to classify the type based on the value type and use that type when
+    ;; encoding
+    (when (eq basic-type 'anyType)
+      (cond ((stringp value)
+             (setq xsi-type "xsd:string" basic-type 'string))
+            ((integerp value)
+             (setq xsi-type "xsd:int" basic-type 'int))
+            ((memq value '(t nil))
+             (setq xsi-type "xsd:boolean" basic-type 'boolean))
+            (t
+             (error "soap-encode-basic-type(%s, %s, %s): cannot classify anyType value"
+                    xml-tag value xsi-type))))
+
     (insert "<" xml-tag " xsi:type=\"" xsi-type "\"")
-    (if value
+
+    ;; We have some ambiguity here, as a nil value represents "false" when the
+    ;; type is boolean, we will never have a "nil" bolean type...
+
+    (if (or value (eq basic-type 'boolean))
         (progn
           (insert ">")
-          (cond ((eq (soap-basic-type-kind type) 'boolean)
-                 (insert (if value "true" "false")))
-                ((eq (soap-basic-type-kind type) 'dateTime)
-                 (cond ((and (consp value) ; is there a time-value-p ?
-                             (>= (length value) 2)
-                             (numberp (nth 0 value))
-                             (numberp (nth 1 value)))
-                        ;; Value is a (current-time) style value, convert to a string
-                        (insert (format-time-string "%Y-%m-%dT%H:%M:%S" value)))
-                       (t
-                        (insert value))))
-                (t
-                 (insert (url-insert-entities-in-string (format "%s" value))))))
+          (case basic-type
+            (string 
+             (unless (stringp value)
+               (error "soap-encode-basic-type(%s, %s, %s): not a string value"
+                      xml-tag value xsi-type))
+             (insert (url-insert-entities-in-string value)))
+
+            (dateTime
+             (cond ((and (consp value) ; is there a time-value-p ?
+                         (>= (length value) 2)
+                         (numberp (nth 0 value))
+                         (numberp (nth 1 value)))
+                    ;; Value is a (current-time) style value, convert to a string
+                    (insert (format-time-string "%Y-%m-%dT%H:%M:%S" value)))
+                   ((stringp value)
+                    (insert (url-insert-entities-in-string value)))
+                   (t
+                    (error "soap-encode-basic-type(%s, %s, %s): not a dateTime value"
+                           xml-tag value xsi-type))))
+
+            (boolean 
+             (unless (memq value '(t nil))
+               (error "soap-encode-basic-type(%s, %s, %s): not a boolean value"
+                      xml-tag value xsi-type))  
+             (insert (if value "true" "false")))
+
+            ((long int) 
+             (unless (integerp value)
+               (error "soap-encode-basic-type(%s, %s, %s): not an integer value"
+                      xml-tag value xsi-type))
+             (insert (number-to-string value)))
+            
+            (base64Binary
+             (unless (stringp value)
+               (error "soap-encode-basic-type(%s, %s, %s): not a string value"
+                      xml-tag value xsi-type))
+             (insert (base64-encode-string value)))
+
+            (otherwise
+             (error "soap-encode-basic-type(%s, %s, %s): don't know how to encode"
+                    xml-tag value xsi-type))))
+        
         (insert " xsi:nil=\"true\">"))
     (insert "</" xml-tag ">\n")))
 
