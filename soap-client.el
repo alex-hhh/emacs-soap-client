@@ -277,7 +277,7 @@ binding) but the same name."
 (defun soap-default-xsd-types ()
   "Return a namespace containing some of the XMLSchema types."
   (let ((ns (make-soap-namespace :name "http://www.w3.org/2001/XMLSchema")))
-    (dolist (type '("string" "dateTime" "boolean" "long" "int" 
+    (dolist (type '("string" "dateTime" "boolean" "long" "int" "float"
                     "base64Binary" "anyType" "Array" "byte[]"))
       (soap-namespace-put
        (make-soap-basic-type :name type :kind (intern type))
@@ -287,7 +287,7 @@ binding) but the same name."
 (defun soap-default-soapenc-types ()
   "Return a namespace containing some of the SOAPEnc types."
   (let ((ns (make-soap-namespace :name "http://schemas.xmlsoap.org/soap/encoding/")))
-    (dolist (type '("string" "dateTime" "boolean" "long" "int" 
+    (dolist (type '("string" "dateTime" "boolean" "long" "int" "float"
                     "base64Binary" "anyType" "Array" "byte[]"))
       (soap-namespace-put
        (make-soap-basic-type :name type :kind (intern type))
@@ -969,8 +969,8 @@ Return a SOAP-NAMESPACE containg the elements."
     (dolist (e contents)
       (when (consp e)
         (push (if wtype
-                  (soap-decode-type wtype node)
-                  (soap-decode-any-type node))
+                  (soap-decode-type wtype e)
+                  (soap-decode-any-type e))
               result)))
     (nreverse result)))
 
@@ -983,7 +983,7 @@ Return a SOAP-NAMESPACE containg the elements."
         (ecase type-kind
           (string (car contents))
           (dateTime (car contents))     ; TODO: convert to a date time
-          ((long int) (string-to-number (car contents)))
+          ((long int float) (string-to-number (car contents)))
           (boolean (string= (downcase (car contents)) "true"))
           (base64Binary (base64-decode-string (car contents)))
           (anyType (soap-decode-any-type node))
