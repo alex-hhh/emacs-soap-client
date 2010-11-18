@@ -22,10 +22,9 @@ will be called."
 This is a specific function which sould not be called directly,
 use `soap-sample-value' instead."
   (case (soap-basic-type-kind type)
-    (string (let ((samples '("foo" "bar" "baz")))
-              (nth (random (length samples)) samples)))
+    (string "a string value")
     (boolean t)                         ; could be nil as well
-    ((long int) (random 42))
+    ((long int) (random 4200))
     ;; TODO: we need better sample values for more types.
     (t (format "%s" (soap-basic-type-kind type)))))
 
@@ -54,11 +53,12 @@ array's element type.
 
 This is a specific function which sould not be called directly,
 use `soap-sample-value' instead."
-  (let ((sample-element-type (soap-sample-value 
-                              (soap-array-type-element-type type))))
-    ;; Our sample value is a vector of two elements (both elements are
-    ;; identical
-    (vector sample-element-type sample-element-type)))
+  (let* ((element-type (soap-array-type-element-type type))
+         (sample1 (soap-sample-value element-type))
+         (sample2 (soap-sample-value element-type)))
+    ;; Our sample value is a vector of two elements, but any number of
+    ;; elements are permissible
+    (vector sample1 sample2 '&etc)))
 
 (defun soap-sample-value-for-message (message)
   "Provide a sample value for a WSDL message.
@@ -162,7 +162,9 @@ ELEMENT when pressed."
    'item element))
 
 (defun soap-inspect-basic-type (basic-type)
-  (insert "Basic type: " (soap-element-fq-name basic-type)))
+  (insert "Basic type: " (soap-element-fq-name basic-type))
+  (insert "\nSample value\n")
+  (pp (soap-sample-value basic-type) (current-buffer)))
 
 (defun soap-inspect-sequence-type (sequence)
   (insert "Sequence type: " (soap-element-fq-name sequence) "\n")
@@ -181,13 +183,17 @@ ELEMENT when pressed."
       (insert " multiple"))
     (when (soap-sequence-element-nillable? element)
       (insert " optional"))
-    (insert "\n")))
+    (insert "\n"))
+  (insert "Sample value:\n")
+  (pp (soap-sample-value sequence) (current-buffer)))
 
 (defun soap-inspect-array-type (array)
   (insert "Array name: " (soap-element-fq-name array) "\n")
   (insert "Element type: ")
   (soap-insert-describe-button 
-   (soap-array-type-element-type array)))
+   (soap-array-type-element-type array))
+  (insert "\nSample value:\n")
+  (pp (soap-sample-value array) (current-buffer)))
 
 (defun soap-inspect-message (message)
   (insert "Message name: " (soap-element-fq-name message) "\n")
