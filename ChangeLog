@@ -1,3 +1,13 @@
+2010-11-18  Alex Harsanyi  <AlexHarsanyi@gmail.com>
+
+	* soap-inspect.el (soap-sample-value-for-basic-type): bigger
+	random range for integer values, changed sample string value.
+	(soap-sample-value-for-array-type): provide two different sample
+	values for the array elements
+	(soap-inspect-basic-type, soap-inspect-sequence-type)
+	(soap-inspect-array-type): provide a sample value when inspecting
+	these types.
+
 2010-10-26  Alex Harsanyi  <AlexHarsanyi@gmail.com>
 
 	* soap-client.el (soap-encode-basic-type): added more error
