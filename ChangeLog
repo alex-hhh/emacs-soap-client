@@ -1,3 +1,16 @@
+2010-11-24  Alex Harsanyi  <AlexHarsanyi@gmail.com>
+
+	* soap-client.el (soap-namespace-get): avoid using `find-if' from
+	the cl package.
+	(soap-wsdl-find-namespace): new function
+	(soap-wsdl-add-namespace, soap-wsdl-get): use it
+	(soap-encode-value, soap-encode-body): use `add-to-list' on
+	`*soap-encoded-namespaces*' instead of `push'
+	(soap-create-envelope): no need to call `remove-duplicates' on
+	`*soap-encoded-namespaces*'
+	(soap-invoke): use an explicit loop to look for the service, avoid
+	using `find' from the cl package
+
 2010-11-18  Alex Harsanyi  <AlexHarsanyi@gmail.com>
 
 	* soap-inspect.el (soap-sample-value-for-basic-type): bigger
