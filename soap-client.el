@@ -24,7 +24,7 @@
 ;;
 ;; http://www.w3.org/TR/wsdl
 
-(require 'cl)
+(eval-when-compile (require 'cl))
 (require 'xml)
 (require 'warnings)
 (require 'url)
@@ -216,10 +216,14 @@ DISCRIMNINANT-PREDICATE is used to pick one of them.  This allows
 storing elements of different types (like a message type and a
 binding) but the same name."
   (assert (stringp name))
-  (let ((e (gethash name (soap-namespace-elements ns))))
-    (cond (discrimninant-predicate (find-if discrimninant-predicate e))
-          ((= (length e) 1) (car e))
-          ((> (length e) 1)
+  (let ((elements (gethash name (soap-namespace-elements ns))))
+    (cond (discrimninant-predicate 
+           (catch 'found
+             (dolist (e elements)
+               (when (funcall discrimninant-predicate e)
+                 (throw 'found e)))))
+          ((= (length elements) 1) (car elements))
+          ((> (length elements) 1)
            (error "soap-namespace-get(%s): multiple elements, discriminant needed" name))
           (t
            nil))))
@@ -315,14 +319,18 @@ binding) but the same name."
   "Add a namespace alias to the WSDL document"
   (push (cons alias name) (soap-wsdl-alias-table wsdl)))
 
+(defun soap-wsdl-find-namespace (name wsdl)
+  "Find a namespace by NAME in the WSDL document."
+  (catch 'found
+    (dolist (ns (soap-wsdl-namespaces wsdl))
+      (when (equal name (soap-namespace-name ns))
+        (throw 'found ns)))))
+
 (defun soap-wsdl-add-namespace (ns wsdl)
   "Add NAMESPACE to the WSDL document.
 If a namespace by this name already exists in WSDL, individual
 elements will be added to it."
-  (let ((existing (find (soap-namespace-name ns)
-                        (soap-wsdl-namespaces wsdl)
-                        :key 'soap-namespace-name
-                        :test 'string=)))
+  (let ((existing (soap-wsdl-find-namespace (soap-namespace-name ns) wsdl)))
     (if existing
         ;; Add elements from NS to EXISTING, replacing existing values.
         (maphash (lambda (key value)
@@ -357,10 +365,7 @@ used to resolve the namespace alias."
            (setq element-name (cdr name))
            (when (symbolp element-name)
              (setq element-name (symbol-name element-name)))
-           (setq namespace (find (car name)
-                                 (soap-wsdl-namespaces wsdl)
-                                 :key 'soap-namespace-name
-                                 :test 'string=))
+           (setq namespace (soap-wsdl-find-namespace (car name) wsdl))
            (unless namespace
              (error "soap-wsdl-get(%s): unknown namespace: %s" name namespace)))
           
@@ -372,11 +377,8 @@ used to resolve the namespace alias."
              (unless ns-name
                (error "soap-wsdl-get(%s): cannot find namespace alias %s" name ns-alias))
              
-             (setq namespace (find ns-name
-                                    (soap-wsdl-namespaces wsdl)
-                                    :key 'soap-namespace-name
-                                    :test 'string=))
-              (unless namespace
+             (setq namespace (soap-wsdl-find-namespace ns-name wsdl))
+             (unless namespace
                (error "soap-wsdl-get(%s): unknown namespace %s, refered by alias %s" 
                       name ns-name ns-alias))))
           (t
@@ -1134,7 +1136,7 @@ on TYPE and calls that encoder to do the work."
     (when (symbolp xml-tag)
       (setq xml-tag (symbol-name xml-tag)))
     (funcall encoder xml-tag value type))
-  (push (soap-element-namespace-tag type) *soap-encoded-namespaces*))
+  (add-to-list '*soap-encoded-namespaces* (soap-element-namespace-tag type)))
 
 (defun soap-encode-basic-type (xml-tag value type)
   (let ((xsi-type (soap-element-fq-name type))
@@ -1277,7 +1279,7 @@ on TYPE and calls that encoder to do the work."
 
     (insert "<soap:Body>\n")
     (when (eq use 'encoded)
-      (push (soap-element-namespace-tag op) *soap-encoded-namespaces*)
+      (add-to-list '*soap-encoded-namespaces* (soap-element-namespace-tag op))
       (insert "<" (soap-element-fq-name op) ">\n"))
 
     (let ((param-table (loop for formal in parameter-order
@@ -1321,7 +1323,7 @@ on TYPE and calls that encoder to do the work."
       (insert "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<soap:Envelope\n")
       (when (eq use 'encoded)
         (insert "    soapenc:encodingStyle=\"http://schemas.xmlsoap.org/soap/encoding/\"\n"))
-      (dolist (nstag (remove-duplicates *soap-encoded-namespaces* :test 'equal))
+      (dolist (nstag *soap-encoded-namespaces*)
         (insert "    xmlns:" nstag "=\"")
         (let ((nsname (cdr (assoc nstag *soap-well-known-xmlns*))))
           (unless nsname
@@ -1342,8 +1344,10 @@ on TYPE and calls that encoder to do the work."
   :group 'soap-client)
 
 (defun soap-invoke (wsdl service operation-name &rest parameters)
-  (let ((port (find service (soap-wsdl-ports wsdl)
-                    :key 'soap-element-name :test 'equal)))
+  (let ((port (catch 'found
+                (dolist (p (soap-wsdl-ports wsdl))
+                  (when (equal service (soap-element-name p))
+                    (throw 'found p))))))
     (unless port
       (error "Unknown SOAP service: %s" service))
 
