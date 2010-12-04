@@ -261,7 +261,7 @@ ELEMENT when pressed."
         (insert "\n")))))
 
 (defun soap-inspect-port (port)
-  (insert "Port name:   " (soap-element-fq-name port) "\n"
+  (insert "Port name:   " (soap-element-name port) "\n"
           "Service URL: " (soap-port-service-url port) "\n"
           "Binding:     ")
   (soap-insert-describe-button (soap-port-binding port)))

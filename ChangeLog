@@ -1,5 +1,8 @@
 2010-12-04  Alex Harsanyi  <AlexHarsanyi@gmail.com>
 
+	* soap-inspect.el (soap-inspect-port): use just the port name (not
+	the fq name)
+
 	* soap-client.el (*soap-well-known-xmlns*): added some new
 	namespaces
 	(*soap-target-xmlns*): new variable
