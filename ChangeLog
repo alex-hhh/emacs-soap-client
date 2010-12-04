@@ -1,3 +1,13 @@
+2010-12-05  Alex Harsanyi  <AlexHarsanyi@gmail.com>
+
+	* soap-client.el (soap-l2wk): don't report an error if there's no
+	default namespace, instead, return the unqualified name.
+	(soap-l2fq): new argument, USE-TNS
+	(soap-parse-wsdl, soap-parse-sequence)
+	(soap-parse-complex-type-complex-content, soap-parse-message)
+	(soap-parse-operation, soap-parse-binding): passs 'USE-TNS to
+	`soap-l2fq'
+
 2010-12-04  Alex Harsanyi  <AlexHarsanyi@gmail.com>
 
 	* soap-inspect.el (soap-inspect-port): use just the port name (not
