@@ -39,7 +39,7 @@
   "Access SOAP web services from Emacs."
   :group 'tools)
 
-;;;; Namespace aliases
+;;;; Support for parsing XML documents with namespaces
 
 ;; XML documents with namespaces are dificult to parse because the names of
 ;; the nodes depend on what "xmlns" aliases have been defined in the document.
@@ -54,7 +54,10 @@
     ("wsdlsoap" . "http://schemas.xmlsoap.org/wsdl/soap/")
     ("xsd" . "http://www.w3.org/2001/XMLSchema")
     ("xsi" . "http://www.w3.org/2001/XMLSchema-instance")
-    ("soap" . "http://schemas.xmlsoap.org/soap/envelope/"))
+    ("soap" . "http://schemas.xmlsoap.org/soap/envelope/")
+    ("soap12" . "http://schemas.xmlsoap.org/wsdl/soap12/")
+    ("http" . "http://schemas.xmlsoap.org/wsdl/http/")
+    ("mime" . "http://schemas.xmlsoap.org/wsdl/mime/"))
   "A list of well known xml namespaces and their aliases.")
 
 (defvar *soap-local-xmlns* nil
@@ -65,6 +68,13 @@ This is a dynamically bound variable, controlled by
 (defvar *soap-default-xmlns* nil
   "The default XML namespaces.
 Names in this namespace will be unqualified.  This is a
+dynamically bound variable, controlled by
+`soap-with-local-xmlns'")
+
+(defvar *soap-target-xmlns* nil
+  "The target XML namespace.
+New XSD elements will be defined in this namespace, unless they
+are fully qualified for a different namespace. This is a
 dynamically bound variable, controlled by
 `soap-with-local-xmlns'")
 
@@ -95,6 +105,42 @@ the local name based on the current local translation tabble
                         local-name)))))))
           (t well-known-name))))
 
+(defun soap-l2wk (local-name)
+  "Convert LOCAL-NAME into a well known name.
+The namespace of LOCAL-NAME is looked up in the
+`*soap-well-known-xmlns*' table and a well known namespace tag is
+used in the name.
+
+nil is returned if there is no well-known namespace for the
+namespace of LOCAL-NAME."
+  (let ((l-name-1 (if (symbolp local-name)
+                       (symbol-name local-name)
+                       local-name))
+        namespace name)
+    (cond
+      ((string-match "^\\(.*\\):\\(.*\\)$" l-name-1)
+       (setq name (match-string 2 l-name-1))
+       (let ((ns (match-string 1 l-name-1)))
+         (setq namespace (cdr (assoc ns *soap-local-xmlns*)))
+         (unless namespace
+           (error "soap-l2wk(%s): no namespace for alias %s" local-name ns))))
+      (t
+       (setq name l-name-1)
+       (setq namespace *soap-default-xmlns*)
+       (unless namespace
+         (error "soap-l2wk(%s): no default namespace defined" local-name))))
+
+    (let ((well-known-ns (car (rassoc namespace *soap-well-known-xmlns*))))
+      (if well-known-ns
+          (let ((well-known-name (concat well-known-ns ":" name)))
+            (if (symbol-name local-name)
+                (intern well-known-name)
+                well-known-name))
+          (progn
+            (soap-warning "soap-l2wk(%s): namespace %s has no well-known tag"
+                          local-name namespace)
+            nil)))))
+
 (defun soap-l2fq (local-name)
   "Convert LOCAL-NAME into a fully qualified name.
 A fully qualified name is a cons of the namespace name and the
@@ -115,36 +161,74 @@ different namespace aliases for the same element."
                    (cons namespace name)
                    (error "soap-l2fq(%s): unknown alias %s" local-name ns)))))
           (t
-           (cons *soap-default-xmlns* local-name)))))
+           (cons *soap-target-xmlns* local-name)))))
 
 (defun soap-extract-xmlns (node &optional xmlns-table)
-  "Return an alias table for the xml NODE by extending XMLNS-TABLE."
-  (let (xmlns default-ns)
+  "Return a namespace alias table for the xml NODE by extending
+XMLNS-TABLE."
+  (let (xmlns default-ns target-ns)
     (dolist (a (xml-node-attributes node))
       (let ((name (symbol-name (car a)))
             (value (cdr a)))
-        (cond ((string= name "xmlns")
+        (cond ((string= name "targetNamespace")
+               (setq target-ns value))
+              ((string= name "xmlns")
                (setq default-ns value))
               ((string-match "^xmlns:\\(.*\\)$" name)
                (push (cons (match-string 1 name) value) xmlns)))))
-    (unless (assoc "tns" xmlns)
-      ;; a tns alias was not defined in this node.  See if the node
-      ;; has a "targetNamespace" attribute and add an alias to this.
-      ;; Note that we might override an existing tns alias in
-      ;; XMLNS-TABLE, but that is intended.
-      (let ((tns (xml-get-attribute-or-nil node 'targetNamespace)))
-        (when tns
-          (push (cons "tns" tns) xmlns))))
-    (cons default-ns (append xmlns xmlns-table))))
+    
+    (let ((tns (assoc "tns" xmlns)))
+      (cond ((and tns target-ns)
+             ;; If a tns alias is defined for this node, it must match the target
+             ;; namespace.
+             (unless (equal target-ns (cdr tns))
+               (soap-warning "soap-extract-xmlns(%s): tns alias and targetNamespace mismatch"
+                             (xml-node-name node))))
+            ((and tns (not target-ns))
+             (setq target-ns (cdr tns)))
+            ((and (not tns) target-ns)
+             ;; a tns alias was not defined in this node.  See if the node has
+             ;; a "targetNamespace" attribute and add an alias to this.  Note
+             ;; that we might override an existing tns alias in XMLNS-TABLE,
+             ;; but that is intended.
+             (push (cons "tns" target-ns) xmlns))))
+          
+    (list default-ns target-ns (append xmlns xmlns-table))))
 
 (defmacro soap-with-local-xmlns (node &rest body)
   "Install a local alias table from NODE and execute BODY."
   (declare (debug (form &rest form)) (indent 1))
   (let ((xmlns (make-symbol "xmlns")))
     `(let ((,xmlns (soap-extract-xmlns ,node *soap-local-xmlns*)))
-       (let ((*soap-default-xmlns* (car ,xmlns))
-             (*soap-local-xmlns* (cdr ,xmlns)))
+       (let ((*soap-default-xmlns* (nth 0 ,xmlns))
+             (*soap-target-xmlns* (or (nth 1 ,xmlns) *soap-target-xmlns*))
+             (*soap-local-xmlns* (nth 2 ,xmlns)))
          ,@body))))
+
+(defun soap-get-target-namespace (node)
+  "Return the target namespace of NODE.
+This is the namespace in which new elements will be defined."
+  (or (xml-get-attribute-or-nil node 'targetNamespace)
+      (cdr (assoc "tns"  *soap-local-xmlns*))
+      *soap-target-xmlns*))
+
+(defun soap-xml-get-children1 (node child-name)
+  "Same as `xml-get-children', but CHILD-NAME can be tagged with
+a namespace tag."
+  (let (result)
+    (dolist (c (xml-node-children node))
+      (when (and (consp c) 
+                 (eq (soap-l2wk (xml-node-name c)) child-name))
+        (push c result)))
+    (nreverse result)))
+
+(defun soap-xml-get-attribute-or-nil1 (node attribute)
+  "Same as `xml-get-attribute-or-nil', but ATTRIBUTE can be
+  tagged with a namespace tag."
+  (catch 'found
+    (dolist (a (xml-node-attributes node))
+      (when (eq (soap-l2wk (car a)) attribute)
+        (throw 'found (cdr a))))))
 
 
 ;;;; XML namespaces
@@ -494,10 +578,10 @@ If ELEMENT has no resolver function, it is silently ignored"
   (if (= (length (soap-operation-parameter-order operation)) 0)
       (setf (soap-operation-parameter-order operation)
             (mapcar 'car (soap-message-parts
-                          (cdr (soap-operation-input operation))))))
-
-  (setf (soap-operation-parameter-order operation)
-        (mapcar 'intern (soap-operation-parameter-order operation))))
+                          (cdr (soap-operation-input operation)))))
+      ;; else
+      (setf (soap-operation-parameter-order operation)
+            (mapcar 'intern (soap-operation-parameter-order operation)))))
 
 (defun soap-resolve-references-for-binding (binding wsdl)
   (when (or (consp (soap-binding-port-type binding)) 
@@ -601,7 +685,7 @@ If ELEMENT has no resolver function, it is silently ignored"
 
 (defun soap-parse-wsdl (node)
   (soap-with-local-xmlns node
-    (assert (eq (xml-node-name node) (soap-wk2l 'wsdl:definitions)))
+    (assert (eq (soap-l2wk (xml-node-name node)) 'wsdl:definitions))
 
     (let ((wsdl (make-soap-wsdl)))
 
@@ -622,34 +706,33 @@ If ELEMENT has no resolver function, it is silently ignored"
       ;; Find all the 'xsd:schema nodes which are children of wsdl:types nodes
       ;; and build our type-library
 
-      (let ((types (car (xml-get-children node (soap-wk2l 'wsdl:types)))))
+      (let ((types (car (soap-xml-get-children1 node 'wsdl:types))))
         (dolist (node (xml-node-children types))
           ;; We cannot use (xml-get-children node (soap-wk2l 'xsd:schama))
           ;; because each node can install its own alias type so the schema
           ;; nodes might have a different prefix.
           (when (consp node)
             (soap-with-local-xmlns node
-              (when (eq (xml-node-name node) (soap-wk2l 'xsd:schema))
+              (when (eq (soap-l2wk (xml-node-name node)) 'xsd:schema)
                 (soap-wsdl-add-namespace (soap-parse-schema node) wsdl))))))
 
-      (let ((ns (make-soap-namespace
-                 :name (xml-get-attribute node 'targetNamespace))))
-        (dolist (node (xml-get-children node (soap-wk2l 'wsdl:message)))
+      (let ((ns (make-soap-namespace :name (soap-get-target-namespace node))))
+        (dolist (node (soap-xml-get-children1 node 'wsdl:message))
           (soap-namespace-put (soap-parse-message node) ns))
 
-        (dolist (node (xml-get-children node (soap-wk2l 'wsdl:portType)))
+        (dolist (node (soap-xml-get-children1 node 'wsdl:portType))
           (let ((port-type (soap-parse-port-type node)))
             (soap-namespace-put port-type ns)
             (soap-wsdl-add-namespace (soap-port-type-operations port-type) wsdl)))
 
-        (dolist (node (xml-get-children node (soap-wk2l 'wsdl:binding)))
+        (dolist (node (soap-xml-get-children1 node 'wsdl:binding))
           (soap-namespace-put (soap-parse-binding node) ns))
 
-        (dolist (node (xml-get-children node (soap-wk2l 'wsdl:service)))
-          (dolist (node (xml-get-children node (soap-wk2l 'wsdl:port)))
+        (dolist (node (soap-xml-get-children1 node 'wsdl:service))
+          (dolist (node (soap-xml-get-children1 node 'wsdl:port))
             (let ((name (xml-get-attribute node 'name))
                   (binding (xml-get-attribute node 'binding))
-                  (url (let ((n (car (xml-get-children node (soap-wk2l 'wsdlsoap:address)))))
+                  (url (let ((n (car (soap-xml-get-children1 node 'wsdlsoap:address))))
                          (xml-get-attribute n 'location))))
               (let ((port (make-soap-port
                            :name name :binding (soap-l2fq binding) :service-url url)))
@@ -666,26 +749,25 @@ If ELEMENT has no resolver function, it is silently ignored"
   "Parse a schema NODE.
 Return a SOAP-NAMESPACE containg the elements."
   (soap-with-local-xmlns node
-    (assert (eq (xml-node-name node) (soap-wk2l 'xsd:schema)))
-    (let ((ns (make-soap-namespace
-               :name (xml-get-attribute node 'targetNamespace))))
+    (assert (eq (soap-l2wk (xml-node-name node)) 'xsd:schema))
+    (let ((ns (make-soap-namespace :name (soap-get-target-namespace node))))
       ;; NOTE: we only extract the complexTypes from the schema, we wouldn't
       ;; know how to handle basic types beyond the built in ones anyway.
-      (dolist (node (xml-get-children node (soap-wk2l 'xsd:complexType)))
+      (dolist (node (soap-xml-get-children1 node 'xsd:complexType))
         (soap-namespace-put (soap-parse-complex-type node) ns))
 
-      (dolist (node (xml-get-children node (soap-wk2l 'xsd:element)))
+      (dolist (node (soap-xml-get-children1 node 'xsd:element))
         (soap-namespace-put (soap-parse-schema-element node) ns))
 
       ns)))
 
 (defun soap-parse-schema-element (node)
-  (assert (eq (xml-node-name node) (soap-wk2l 'xsd:element)))
+  (assert (eq (soap-l2wk (xml-node-name node)) 'xsd:element))
   (let ((name (xml-get-attribute-or-nil node 'name))
         type)
     ;; A schema element that contains an inline complex type --
     ;; construct the actual complex type for it.
-    (let ((type-node (xml-get-children node (soap-wk2l 'xsd:complexType))))
+    (let ((type-node (soap-xml-get-children1 node 'xsd:complexType)))
       (when (> (length type-node) 0)
         (assert (= (length type-node) 1)) ; only one complex type definition per element
         (setq type (soap-parse-complex-type (car type-node)))))
@@ -693,7 +775,7 @@ Return a SOAP-NAMESPACE containg the elements."
     type))
 
 (defun soap-parse-complex-type (node)
-  (assert (eq (xml-node-name node) (soap-wk2l 'xsd:complexType)))
+  (assert (eq (soap-l2wk (xml-node-name node)) 'xsd:complexType))
   (let ((name (xml-get-attribute-or-nil node 'name))
         ;; Use a dummy type for the complex type, it will be replaced
         ;; with the real type below, except when the complex type node
@@ -701,13 +783,13 @@ Return a SOAP-NAMESPACE containg the elements."
         (type (make-soap-sequence-type :elements nil)))
     (dolist (c (xml-node-children node))
       (when (consp c)               ; skip string nodes, which are whitespace
-        (let ((node-name (xml-node-name c)))
+        (let ((node-name (soap-l2wk (xml-node-name c))))
           (cond
-            ((eq node-name (soap-wk2l 'xsd:sequence))
+            ((eq node-name 'xsd:sequence)
              (setq type (soap-parse-complex-type-sequence c)))
-            ((eq node-name (soap-wk2l 'xsd:complexContent))
+            ((eq node-name 'xsd:complexContent)
              (setq type (soap-parse-complex-type-complex-content c)))
-            ((eq node-name (soap-wk2l 'xsd:attribute))
+            ((eq node-name 'xsd:attribute)
              ;; The name of this node comes from an attribute tag
              (let ((n (xml-get-attribute-or-nil c 'name)))
                (setq name n)))
@@ -717,9 +799,9 @@ Return a SOAP-NAMESPACE containg the elements."
     type))
 
 (defun soap-parse-sequence (node)
-  (assert (eq (xml-node-name node) (soap-wk2l 'xsd:sequence)))
+  (assert (eq (soap-l2wk (xml-node-name node)) 'xsd:sequence))
   (let (elements)
-    (dolist (e (xml-get-children node (soap-wk2l 'xsd:element)))
+    (dolist (e (soap-xml-get-children1 node 'xsd:element))
       (let ((name (xml-get-attribute-or-nil e 'name))
             (type (xml-get-attribute-or-nil e 'type))
             (nillable? (or (equal (xml-get-attribute-or-nil e 'nillable) "true")
@@ -732,7 +814,7 @@ Return a SOAP-NAMESPACE containg the elements."
 
             ;; The node does not have a type, maybe it has a complexType
             ;; defined inline...
-            (let ((type-node (xml-get-children e (soap-wk2l 'xsd:complexType))))
+            (let ((type-node (soap-xml-get-children1 e 'xsd:complexType)))
               (when (> (length type-node) 0)
                 (assert (= (length type-node) 1)) ; only one complex type definition per element
                 (setq type (soap-parse-complex-type (car type-node))))))
@@ -747,22 +829,22 @@ Return a SOAP-NAMESPACE containg the elements."
     (make-soap-sequence-type :elements elements)))
 
 (defun soap-parse-complex-type-complex-content (node)
-  (assert (eq (xml-node-name node) (soap-wk2l 'xsd:complexContent)))
+  (assert (eq (soap-l2wk (xml-node-name node)) 'xsd:complexContent))
   (let (array? parent elements)
-    (let ((extension (car-safe (xml-get-children node (soap-wk2l 'xsd:extension))))
-          (restriction (car-safe (xml-get-children node (soap-wk2l 'xsd:restriction)))))
+    (let ((extension (car-safe (soap-xml-get-children1 node 'xsd:extension)))
+          (restriction (car-safe (soap-xml-get-children1 node 'xsd:restriction))))
       ;; a complex content node is either an extension or a restriction
       (cond (extension
              (setq parent (xml-get-attribute-or-nil extension 'base))
              (setq elements (soap-parse-sequence
-                             (car (xml-get-children extension (soap-wk2l 'xsd:sequence))))))
+                             (car (soap-xml-get-children1 extension 'xsd:sequence)))))
             (restriction
              (let ((base (xml-get-attribute-or-nil restriction 'base)))
                ;; we only support restrictions on array types
                (assert (equal base "soapenc:Array")))
              (setq array? t)
-             (let ((attribute (car (xml-get-children restriction (soap-wk2l 'xsd:attribute)))))
-               (let ((array-type (xml-get-attribute-or-nil attribute (soap-wk2l 'wsdl:arrayType))))
+             (let ((attribute (car (soap-xml-get-children1 restriction 'xsd:attribute))))
+               (let ((array-type (soap-xml-get-attribute-or-nil1 attribute 'wsdl:arrayType)))
                  (when (string-match "^\\(.*\\)\\[\\]$" array-type)
                    (setq parent (match-string 1 array-type))))))
 
@@ -777,10 +859,10 @@ Return a SOAP-NAMESPACE containg the elements."
         (make-soap-sequence-type :parent parent :elements elements))))
 
 (defun soap-parse-message (node)
-  (assert (eq (xml-node-name node) (soap-wk2l 'wsdl:message)))
+  (assert (eq (soap-l2wk (xml-node-name node)) 'wsdl:message))
   (let ((name (xml-get-attribute-or-nil node 'name))
         parts)
-    (dolist (p (xml-get-children node (soap-wk2l 'wsdl:part)))
+    (dolist (p (soap-xml-get-children1 node 'wsdl:part))
       (let ((name (xml-get-attribute-or-nil p 'name))
             (type (xml-get-attribute-or-nil p 'type))
             (element (xml-get-attribute-or-nil p 'element)))
@@ -795,10 +877,10 @@ Return a SOAP-NAMESPACE containg the elements."
     (make-soap-message :name name :parts (nreverse parts))))
 
 (defun soap-parse-port-type (node)
-  (assert (eq (xml-node-name node) (soap-wk2l 'wsdl:portType)))
+  (assert (eq (soap-l2wk (xml-node-name node)) 'wsdl:portType))
   (let ((ns (make-soap-namespace
              :name (concat "urn:" (xml-get-attribute node 'name)))))
-    (dolist (node (xml-get-children node (soap-wk2l 'wsdl:operation)))
+    (dolist (node (soap-xml-get-children1 node 'wsdl:operation))
       (let ((o (soap-parse-operation node)))
 
         (let ((other-operation (soap-namespace-get (soap-element-name o) ns 'soap-operation-p)))
@@ -828,23 +910,23 @@ Return a SOAP-NAMESPACE containg the elements."
                         :operations ns)))
 
 (defun soap-parse-operation (node)
-  (assert (eq (xml-node-name node) (soap-wk2l 'wsdl:operation)))
+  (assert (eq (soap-l2wk (xml-node-name node)) 'wsdl:operation))
   (let ((name (xml-get-attribute node 'name))
         (parameter-order (split-string (xml-get-attribute node 'parameterOrder)))
         input output faults)
     (dolist (n (xml-node-children node))
       (when (consp n)                 ; skip string nodes which are whitespace
-        (let ((node-name (xml-node-name n)))
+        (let ((node-name (soap-l2wk (xml-node-name n))))
           (cond
-            ((eq node-name (soap-wk2l 'wsdl:input))
+            ((eq node-name 'wsdl:input)
              (let ((message (xml-get-attribute n 'message))
                    (name (xml-get-attribute n 'name)))
                (setq input (cons name (soap-l2fq message)))))
-            ((eq node-name (soap-wk2l 'wsdl:output))
+            ((eq node-name 'wsdl:output)
              (let ((message (xml-get-attribute n 'message))
                    (name (xml-get-attribute n 'name)))
                (setq output (cons name (soap-l2fq message)))))
-            ((eq node-name (soap-wk2l 'wsdl:fault))
+            ((eq node-name 'wsdl:fault)
              (let ((message (xml-get-attribute n 'message))
                    (name (xml-get-attribute n 'name)))
                (push (cons name (soap-l2fq message)) faults)))))))
@@ -856,15 +938,15 @@ Return a SOAP-NAMESPACE containg the elements."
      :faults (nreverse faults))))
 
 (defun soap-parse-binding (node)
-  (assert (eq (xml-node-name node) (soap-wk2l 'wsdl:binding)))
+  (assert (eq (soap-l2wk (xml-node-name node)) 'wsdl:binding))
   (let ((name (xml-get-attribute node 'name))
         (type (xml-get-attribute node 'type)))
     (let ((binding (make-soap-binding :name name :port-type (soap-l2fq type))))
-      (dolist (wo (xml-get-children node (soap-wk2l 'wsdl:operation)))
+      (dolist (wo (soap-xml-get-children1 node 'wsdl:operation))
         (let ((name (xml-get-attribute wo 'name))
               soap-action
               use)
-          (dolist (so (xml-get-children wo (soap-wk2l 'wsdlsoap:operation)))
+          (dolist (so (soap-xml-get-children1 wo 'wsdlsoap:operation))
             (setq soap-action (xml-get-attribute-or-nil so 'soapAction)))
 
           ;; Search a wsdlsoap:body node and find a "use" tag.  The
@@ -872,14 +954,14 @@ Return a SOAP-NAMESPACE containg the elements."
           ;; output types (alhtough the WDSL spec allows separate
           ;; "use"-s for each of them...
 
-          (dolist (i (xml-get-children wo (soap-wk2l 'wsdl:input)))
-            (dolist (b (xml-get-children i (soap-wk2l 'wsdlsoap:body)))
+          (dolist (i (soap-xml-get-children1 wo 'wsdl:input))
+            (dolist (b (soap-xml-get-children1 i 'wsdlsoap:body))
               (setq use (or use
                             (xml-get-attribute-or-nil b 'use)))))
 
           (unless use
-            (dolist (i (xml-get-children wo (soap-wk2l 'wsdl:output)))
-              (dolist (b (xml-get-children i (soap-wk2l 'wsdlsoap:body)))
+            (dolist (i (soap-xml-get-children1 wo 'wsdl:output))
+              (dolist (b (soap-xml-get-children1 i 'wsdlsoap:body))
                 (setq use (or use
                               (xml-get-attribute-or-nil b 'use))))))
 
@@ -920,7 +1002,7 @@ Return a SOAP-NAMESPACE containg the elements."
                (error "Cannot find href %s" href))))
           (t
            (soap-with-local-xmlns node
-             (if (equal (xml-get-attribute-or-nil node (soap-wk2l 'xsi:nil)) "true")
+             (if (equal (soap-xml-get-attribute-or-nil1 node 'xsi:nil) "true")
                  nil
                  (let ((decoder (get (aref type 0) 'soap-decoder)))
                    (funcall decoder type node))))))))
@@ -928,7 +1010,7 @@ Return a SOAP-NAMESPACE containg the elements."
 (defun soap-decode-any-type (node)
   "Decode NODE using type information inside it."
   ;; If the NODE has type information, we use that...
-  (let ((type (xml-get-attribute-or-nil node (soap-wk2l 'xsi:type))))
+  (let ((type (soap-xml-get-attribute-or-nil1 node 'xsi:type)))
     (if type
         (let ((wtype (soap-wsdl-get type *current-wsdl* 'soap-type-p)))
           (if wtype
@@ -955,7 +1037,7 @@ Return a SOAP-NAMESPACE containg the elements."
 
 (defun soap-decode-array (node)
   "Decode NODE as an Array using type information inside it."
-  (let ((type (xml-get-attribute-or-nil node (soap-wk2l 'soapenc:arrayType)))
+  (let ((type (soap-xml-get-attribute-or-nil1 node 'soapenc:arrayType))
         (wtype nil)
         (contents (xml-node-children node))
         result)
@@ -1041,10 +1123,10 @@ This is because it is easier to work with list results in LISP."
 
 (defun soap-parse-envelope (node operation wsdl)
   (soap-with-local-xmlns node
-    (assert (eq (xml-node-name node) (soap-wk2l 'soap:Envelope)))
-    (let ((body (car (xml-get-children node (soap-wk2l 'soap:Body)))))
+    (assert (eq (soap-l2wk (xml-node-name node)) 'soap:Envelope))
+    (let ((body (car (soap-xml-get-children1 node 'soap:Body))))
 
-      (let ((fault (car (xml-get-children body (soap-wk2l 'soap:Fault)))))
+      (let ((fault (car (soap-xml-get-children1 body 'soap:Fault))))
         (when fault
           (let ((fault-code (let ((n (car (xml-get-children fault 'faultcode))))
                               (car-safe (xml-node-children n))))

@@ -1,3 +1,25 @@
+2010-12-04  Alex Harsanyi  <AlexHarsanyi@gmail.com>
+
+	* soap-client.el (*soap-well-known-xmlns*): added some new
+	namespaces
+	(*soap-target-xmlns*): new variable
+	(soap-l2wk): new function
+	(soap-l2fq): use *soap-target-xmlns* if name is unqualified
+	(soap-extract-xmlns): return the targetNamespace in addition to
+	the default namespace
+	(soap-with-local-xmlns): bind *soap-target-xmlns*
+	(soap-get-target-namespace, soap-xml-get-children1)
+	(soap-xml-get-attribute-or-nil1): new functions
+	(soap-resolve-references-for-operation): don't intern the elements
+	of parameter-order, if we just created it
+	(soap-parse-wsdl, soap-parse-schema, soap-parse-schema-element)
+	(soap-parse-complex-type, soap-parse-sequence)
+	(soap-parse-complex-type-complex-content, soap-parse-message)
+	(soap-parse-port-type, soap-parse-operation, )
+	(soap-parse-binding, soap-decode-type, soap-decode-any-type)
+	(soap-decode-array, soap-parse-envelope): use local to well-known
+	translations (instead of the reverse)
+
 2010-11-24  Alex Harsanyi  <AlexHarsanyi@gmail.com>
 
 	* soap-client.el (soap-namespace-get): avoid using `find-if' from
