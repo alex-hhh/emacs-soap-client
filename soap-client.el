@@ -126,27 +126,34 @@ namespace of LOCAL-NAME."
            (error "soap-l2wk(%s): no namespace for alias %s" local-name ns))))
       (t
        (setq name l-name-1)
-       (setq namespace *soap-default-xmlns*)
-       (unless namespace
-         (error "soap-l2wk(%s): no default namespace defined" local-name))))
+       (setq namespace *soap-default-xmlns*)))
 
-    (let ((well-known-ns (car (rassoc namespace *soap-well-known-xmlns*))))
-      (if well-known-ns
-          (let ((well-known-name (concat well-known-ns ":" name)))
-            (if (symbol-name local-name)
-                (intern well-known-name)
-                well-known-name))
-          (progn
-            (soap-warning "soap-l2wk(%s): namespace %s has no well-known tag"
-                          local-name namespace)
-            nil)))))
+    (if namespace
+        (let ((well-known-ns (car (rassoc namespace *soap-well-known-xmlns*))))
+          (if well-known-ns
+              (let ((well-known-name (concat well-known-ns ":" name)))
+                (if (symbol-name local-name)
+                    (intern well-known-name)
+                    well-known-name))
+              (progn
+                (soap-warning "soap-l2wk(%s): namespace %s has no well-known tag"
+                              local-name namespace)
+                nil)))
+        ;; if no namespace is defined, just return the unqualified name
+        name)))
+        
 
-(defun soap-l2fq (local-name)
+(defun soap-l2fq (local-name &optional use-tns)
   "Convert LOCAL-NAME into a fully qualified name.
 A fully qualified name is a cons of the namespace name and the
 name of the element itself. For example \"xsd:string\" is
 converted to \(\"http://www.w3.org/2001/XMLSchema\" . \"string\"
 \).
+
+The USE-TNS argument specifies what to do when LOCAL-NAME has no
+namespace tag.  If USE-TNS is non-nil, the `*soap-target-xmlns*'
+will be used as the element's namespace, otherwise
+`*soap-default-xmlns*' will be used.
 
 This is needed because different parts of a WSDL document can use
 different namespace aliases for the same element."
@@ -161,7 +168,10 @@ different namespace aliases for the same element."
                    (cons namespace name)
                    (error "soap-l2fq(%s): unknown alias %s" local-name ns)))))
           (t
-           (cons *soap-target-xmlns* local-name)))))
+           (cons (if use-tns
+                     *soap-target-xmlns*
+                     *soap-default-xmlns*)
+                 local-name)))))
 
 (defun soap-extract-xmlns (node &optional xmlns-table)
   "Return a namespace alias table for the xml NODE by extending
@@ -735,7 +745,7 @@ If ELEMENT has no resolver function, it is silently ignored"
                   (url (let ((n (car (soap-xml-get-children1 node 'wsdlsoap:address))))
                          (xml-get-attribute n 'location))))
               (let ((port (make-soap-port
-                           :name name :binding (soap-l2fq binding) :service-url url)))
+                           :name name :binding (soap-l2fq binding 'tns) :service-url url)))
                 (soap-namespace-put port ns)
                 (push port (soap-wsdl-ports wsdl))))))
 
@@ -810,7 +820,7 @@ Return a SOAP-NAMESPACE containg the elements."
             (multiple? (let ((e (xml-get-attribute-or-nil e 'maxOccurs)))
                          (and e (not (equal e "1"))))))
         (if type
-            (setq type (soap-l2fq type))
+            (setq type (soap-l2fq type 'tns))
 
             ;; The node does not have a type, maybe it has a complexType
             ;; defined inline...
@@ -852,7 +862,7 @@ Return a SOAP-NAMESPACE containg the elements."
              (error "Unknown complex type"))))
 
     (if parent
-        (setq parent (soap-l2fq parent)))
+        (setq parent (soap-l2fq parent 'tns)))
     
     (if array?
         (make-soap-array-type :element-type parent)
@@ -868,10 +878,10 @@ Return a SOAP-NAMESPACE containg the elements."
             (element (xml-get-attribute-or-nil p 'element)))
 
         (when type
-          (setq type (soap-l2fq type)))
+          (setq type (soap-l2fq type 'tns)))
 
         (when element
-          (setq element (soap-l2fq element)))
+          (setq element (soap-l2fq element 'tns)))
 
         (push (cons name (or type element)) parts)))
     (make-soap-message :name name :parts (nreverse parts))))
@@ -921,15 +931,15 @@ Return a SOAP-NAMESPACE containg the elements."
             ((eq node-name 'wsdl:input)
              (let ((message (xml-get-attribute n 'message))
                    (name (xml-get-attribute n 'name)))
-               (setq input (cons name (soap-l2fq message)))))
+               (setq input (cons name (soap-l2fq message 'tns)))))
             ((eq node-name 'wsdl:output)
              (let ((message (xml-get-attribute n 'message))
                    (name (xml-get-attribute n 'name)))
-               (setq output (cons name (soap-l2fq message)))))
+               (setq output (cons name (soap-l2fq message 'tns)))))
             ((eq node-name 'wsdl:fault)
              (let ((message (xml-get-attribute n 'message))
                    (name (xml-get-attribute n 'name)))
-               (push (cons name (soap-l2fq message)) faults)))))))
+               (push (cons name (soap-l2fq message 'tns)) faults)))))))
     (make-soap-operation
      :name name
      :parameter-order parameter-order
@@ -941,7 +951,7 @@ Return a SOAP-NAMESPACE containg the elements."
   (assert (eq (soap-l2wk (xml-node-name node)) 'wsdl:binding))
   (let ((name (xml-get-attribute node 'name))
         (type (xml-get-attribute node 'type)))
-    (let ((binding (make-soap-binding :name name :port-type (soap-l2fq type))))
+    (let ((binding (make-soap-binding :name name :port-type (soap-l2fq type 'tns))))
       (dolist (wo (soap-xml-get-children1 node 'wsdl:operation))
         (let ((name (xml-get-attribute wo 'name))
               soap-action
