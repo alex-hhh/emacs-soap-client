@@ -1,3 +1,17 @@
+2010-12-06  Alex Harsanyi  <AlexHarsanyi@gmail.com>
+
+	* soap-client.el (soap-l2wk): comment out warning about not
+	finding a well known namespace, it seems to happen too oftern for
+	benign cases...
+	(soap-xml-get-children1, soap-xml-get-attribute-or-nil1): install
+	a local namespace table via `soap-with-local-xmlns', it seems to
+	be needed for some responses.
+	(soap-resolve-references-for-operation): always try to intern
+	elements in the PARAMETER-ORDER list.
+	(soap-parse-response): replace assert with an error message
+	(soap-with-local-xmlns): don't change `*soap-default-xmlns*'
+	unless we have a non nil value
+
 2010-12-05  Alex Harsanyi  <AlexHarsanyi@gmail.com>
 
 	* soap-client.el (soap-l2wk): don't report an error if there's no

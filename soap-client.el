@@ -136,8 +136,8 @@ namespace of LOCAL-NAME."
                     (intern well-known-name)
                     well-known-name))
               (progn
-                (soap-warning "soap-l2wk(%s): namespace %s has no well-known tag"
-                              local-name namespace)
+                ;; (soap-warning "soap-l2wk(%s): namespace %s has no well-known tag"
+                ;;               local-name namespace)
                 nil)))
         ;; if no namespace is defined, just return the unqualified name
         name)))
@@ -210,7 +210,7 @@ XMLNS-TABLE."
   (declare (debug (form &rest form)) (indent 1))
   (let ((xmlns (make-symbol "xmlns")))
     `(let ((,xmlns (soap-extract-xmlns ,node *soap-local-xmlns*)))
-       (let ((*soap-default-xmlns* (nth 0 ,xmlns))
+       (let ((*soap-default-xmlns* (or (nth 0 ,xmlns) *soap-default-xmlns*))
              (*soap-target-xmlns* (or (nth 1 ,xmlns) *soap-target-xmlns*))
              (*soap-local-xmlns* (nth 2 ,xmlns)))
          ,@body))))
@@ -228,7 +228,8 @@ a namespace tag."
   (let (result)
     (dolist (c (xml-node-children node))
       (when (and (consp c) 
-                 (eq (soap-l2wk (xml-node-name c)) child-name))
+                 (soap-with-local-xmlns c
+                   (eq (soap-l2wk (xml-node-name c)) child-name)))
         (push c result)))
     (nreverse result)))
 
@@ -236,9 +237,10 @@ a namespace tag."
   "Same as `xml-get-attribute-or-nil', but ATTRIBUTE can be
   tagged with a namespace tag."
   (catch 'found
-    (dolist (a (xml-node-attributes node))
-      (when (eq (soap-l2wk (car a)) attribute)
-        (throw 'found (cdr a))))))
+    (soap-with-local-xmlns node
+      (dolist (a (xml-node-attributes node))
+        (when (eq (soap-l2wk (car a)) attribute)
+          (throw 'found (cdr a)))))))
 
 
 ;;;; XML namespaces
@@ -585,13 +587,17 @@ If ELEMENT has no resolver function, it is silently ignored"
             (push fault resolved-faults))))
     (setf (soap-operation-faults operation) resolved-faults))
 
-  (if (= (length (soap-operation-parameter-order operation)) 0)
-      (setf (soap-operation-parameter-order operation)
-            (mapcar 'car (soap-message-parts
-                          (cdr (soap-operation-input operation)))))
-      ;; else
-      (setf (soap-operation-parameter-order operation)
-            (mapcar 'intern (soap-operation-parameter-order operation)))))
+  (when (= (length (soap-operation-parameter-order operation)) 0)
+    (setf (soap-operation-parameter-order operation)
+          (mapcar 'car (soap-message-parts
+                        (cdr (soap-operation-input operation))))))
+  
+  (setf (soap-operation-parameter-order operation)
+        (mapcar (lambda (p) 
+                  (if (stringp p)
+                      (intern p)
+                      p))
+                (soap-operation-parameter-order operation))))
 
 (defun soap-resolve-references-for-binding (binding wsdl)
   (when (or (consp (soap-binding-port-type binding)) 
@@ -1199,7 +1205,9 @@ This is because it is easier to work with list results in LISP."
                                (when (equal (soap-l2fq (xml-node-name c)) fqname)
                                  (throw 'found c))))))))))
 
-            (assert node)
+            (unless node
+              (error "soap-parse-response(%s): cannot find message part %s"
+                     (soap-element-name op) tag))
             (push (soap-decode-type type node) decoded-parts)))
 
         decoded-parts))))
