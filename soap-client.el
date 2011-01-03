@@ -229,7 +229,10 @@ a namespace tag."
     (dolist (c (xml-node-children node))
       (when (and (consp c) 
                  (soap-with-local-xmlns c
-                   (eq (soap-l2wk (xml-node-name c)) child-name)))
+                   ;; We use `ignore-errors' here because we want to silently
+                   ;; skip nodes for which we cannot convert them to a
+                   ;; well-known name.
+                   (eq (ignore-errors (soap-l2wk (xml-node-name c))) child-name)))
         (push c result)))
     (nreverse result)))
 
@@ -239,7 +242,9 @@ a namespace tag."
   (catch 'found
     (soap-with-local-xmlns node
       (dolist (a (xml-node-attributes node))
-        (when (eq (soap-l2wk (car a)) attribute)
+        ;; We use `ignore-errors' here because we want to silently skip
+        ;; attributes for which we cannot convert them to a well-known name.
+        (when (eq (ignore-errors (soap-l2wk (car a))) attribute)
           (throw 'found (cdr a)))))))
 
 
