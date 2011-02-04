@@ -298,6 +298,7 @@ If NAME is nil, an element with the same name as TARGET will be
 added to the namespace."
 
   (unless (and name (not (equal name "")))
+    ;; if name is nil, use TARGET as a name...
     (cond ((soap-element-p target)
            (setq name (soap-element-name target)))
           ((stringp target)
@@ -306,7 +307,7 @@ added to the namespace."
                  (t
                   (setq name target))))))
 
-  (assert name)
+  (assert name)                         ; by now, name should be valid
   (push (make-soap-namespace-link :name name :target target)
         (gethash name (soap-namespace-elements ns))))
 
@@ -706,7 +707,11 @@ If ELEMENT has no resolver function, it is silently ignored"
 
 (defun soap-parse-wsdl (node)
   (soap-with-local-xmlns node
-    (assert (eq (soap-l2wk (xml-node-name node)) 'wsdl:definitions))
+
+    (assert (eq (soap-l2wk (xml-node-name node)) 'wsdl:definitions)
+            nil
+            "soap-parse-wsdl: expecting wsdl:definitions node, got %s" 
+            (soap-l2wk (xml-node-name node)))
 
     (let ((wsdl (make-soap-wsdl)))
 
@@ -770,7 +775,10 @@ If ELEMENT has no resolver function, it is silently ignored"
   "Parse a schema NODE.
 Return a SOAP-NAMESPACE containg the elements."
   (soap-with-local-xmlns node
-    (assert (eq (soap-l2wk (xml-node-name node)) 'xsd:schema))
+    (assert (eq (soap-l2wk (xml-node-name node)) 'xsd:schema)
+            nil
+            "soap-parse-schema: expecting an xsd:schema node, got %s"
+            (soap-l2wk (xml-node-name node)))
     (let ((ns (make-soap-namespace :name (soap-get-target-namespace node))))
       ;; NOTE: we only extract the complexTypes from the schema, we wouldn't
       ;; know how to handle basic types beyond the built in ones anyway.
@@ -783,7 +791,10 @@ Return a SOAP-NAMESPACE containg the elements."
       ns)))
 
 (defun soap-parse-schema-element (node)
-  (assert (eq (soap-l2wk (xml-node-name node)) 'xsd:element))
+  (assert (eq (soap-l2wk (xml-node-name node)) 'xsd:element)
+          nil
+          "soap-parse-schema-element: expecting xsd:element node, got %s"
+          (soap-l2wk (xml-node-name node)))
   (let ((name (xml-get-attribute-or-nil node 'name))
         type)
     ;; A schema element that contains an inline complex type --
@@ -796,7 +807,10 @@ Return a SOAP-NAMESPACE containg the elements."
     type))
 
 (defun soap-parse-complex-type (node)
-  (assert (eq (soap-l2wk (xml-node-name node)) 'xsd:complexType))
+  (assert (eq (soap-l2wk (xml-node-name node)) 'xsd:complexType)
+          nil
+          "soap-parse-complex-type: expecting xsd:complexType node, got %s"
+          (soap-l2wk (xml-node-name node)))
   (let ((name (xml-get-attribute-or-nil node 'name))
         ;; Use a dummy type for the complex type, it will be replaced
         ;; with the real type below, except when the complex type node
@@ -820,7 +834,10 @@ Return a SOAP-NAMESPACE containg the elements."
     type))
 
 (defun soap-parse-sequence (node)
-  (assert (eq (soap-l2wk (xml-node-name node)) 'xsd:sequence))
+  (assert (eq (soap-l2wk (xml-node-name node)) 'xsd:sequence)
+          nil
+          "soap-parse-sequence: expecting xsd:sequence node, got %s"
+          (soap-l2wk (xml-node-name node)))
   (let (elements)
     (dolist (e (soap-xml-get-children1 node 'xsd:element))
       (let ((name (xml-get-attribute-or-nil e 'name))
@@ -837,7 +854,9 @@ Return a SOAP-NAMESPACE containg the elements."
             ;; defined inline...
             (let ((type-node (soap-xml-get-children1 e 'xsd:complexType)))
               (when (> (length type-node) 0)
-                (assert (= (length type-node) 1)) ; only one complex type definition per element
+                (assert (= (length type-node) 1)
+                        nil
+                        "only one complex type definition per element supported")
                 (setq type (soap-parse-complex-type (car type-node))))))
 
         (push (make-soap-sequence-element
@@ -850,7 +869,10 @@ Return a SOAP-NAMESPACE containg the elements."
     (make-soap-sequence-type :elements elements)))
 
 (defun soap-parse-complex-type-complex-content (node)
-  (assert (eq (soap-l2wk (xml-node-name node)) 'xsd:complexContent))
+  (assert (eq (soap-l2wk (xml-node-name node)) 'xsd:complexContent)
+          nil
+          "soap-parse-complex-type-complex-content: expecting xsd:complexContent node, got %s"
+          (soap-l2wk (xml-node-name node)))
   (let (array? parent elements)
     (let ((extension (car-safe (soap-xml-get-children1 node 'xsd:extension)))
           (restriction (car-safe (soap-xml-get-children1 node 'xsd:restriction))))
@@ -861,8 +883,10 @@ Return a SOAP-NAMESPACE containg the elements."
                              (car (soap-xml-get-children1 extension 'xsd:sequence)))))
             (restriction
              (let ((base (xml-get-attribute-or-nil restriction 'base)))
-               ;; we only support restrictions on array types
-               (assert (equal base "soapenc:Array")))
+               (assert (equal base "soapenc:Array")
+                       nil
+                       "restrictions suported only for soapenc:Array types, this is a %s"
+                       base))
              (setq array? t)
              (let ((attribute (car (soap-xml-get-children1 restriction 'xsd:attribute))))
                (let ((array-type (soap-xml-get-attribute-or-nil1 attribute 'wsdl:arrayType)))
@@ -880,7 +904,10 @@ Return a SOAP-NAMESPACE containg the elements."
         (make-soap-sequence-type :parent parent :elements elements))))
 
 (defun soap-parse-message (node)
-  (assert (eq (soap-l2wk (xml-node-name node)) 'wsdl:message))
+  (assert (eq (soap-l2wk (xml-node-name node)) 'wsdl:message)
+          nil
+          "soap-parse-message: expecting wsdl:message node, got %s"
+          (soap-l2wk (xml-node-name node)))
   (let ((name (xml-get-attribute-or-nil node 'name))
         parts)
     (dolist (p (soap-xml-get-children1 node 'wsdl:part))
@@ -898,7 +925,10 @@ Return a SOAP-NAMESPACE containg the elements."
     (make-soap-message :name name :parts (nreverse parts))))
 
 (defun soap-parse-port-type (node)
-  (assert (eq (soap-l2wk (xml-node-name node)) 'wsdl:portType))
+  (assert (eq (soap-l2wk (xml-node-name node)) 'wsdl:portType)
+          nil
+          "soap-parse-port-type: expecting wsdl:portType node got %s"
+          (soap-l2wk (xml-node-name node)))
   (let ((ns (make-soap-namespace
              :name (concat "urn:" (xml-get-attribute node 'name)))))
     (dolist (node (soap-xml-get-children1 node 'wsdl:operation))
@@ -931,7 +961,10 @@ Return a SOAP-NAMESPACE containg the elements."
                         :operations ns)))
 
 (defun soap-parse-operation (node)
-  (assert (eq (soap-l2wk (xml-node-name node)) 'wsdl:operation))
+  (assert (eq (soap-l2wk (xml-node-name node)) 'wsdl:operation)
+          nil
+          "soap-parse-operation: expecting wsdl:operation node, got %s"
+          (soap-l2wk (xml-node-name node)))
   (let ((name (xml-get-attribute node 'name))
         (parameter-order (split-string (xml-get-attribute node 'parameterOrder)))
         input output faults)
@@ -959,7 +992,10 @@ Return a SOAP-NAMESPACE containg the elements."
      :faults (nreverse faults))))
 
 (defun soap-parse-binding (node)
-  (assert (eq (soap-l2wk (xml-node-name node)) 'wsdl:binding))
+  (assert (eq (soap-l2wk (xml-node-name node)) 'wsdl:binding)
+          nil
+          "soap-parse-binding: expecting wsdl:binding node, got %s"
+          (soap-l2wk (xml-node-name node)))
   (let ((name (xml-get-attribute node 'name))
         (type (xml-get-attribute node 'type)))
     (let ((binding (make-soap-binding :name name :port-type (soap-l2fq type 'tns))))
@@ -1026,6 +1062,7 @@ Return a SOAP-NAMESPACE containg the elements."
              (if (equal (soap-xml-get-attribute-or-nil1 node 'xsi:nil) "true")
                  nil
                  (let ((decoder (get (aref type 0) 'soap-decoder)))
+                   (assert decoder nil "no soap-decoder for %s type" (aref type 0))
                    (funcall decoder type node))))))))
 
 (defun soap-decode-any-type (node)
@@ -1144,7 +1181,10 @@ This is because it is easier to work with list results in LISP."
 
 (defun soap-parse-envelope (node operation wsdl)
   (soap-with-local-xmlns node
-    (assert (eq (soap-l2wk (xml-node-name node)) 'soap:Envelope))
+    (assert (eq (soap-l2wk (xml-node-name node)) 'soap:Envelope)
+            nil
+            "soap-parse-envelope: expecting soap:Envelope node, got %s"
+            (soap-l2wk (xml-node-name node)))
     (let ((body (car (soap-xml-get-children1 node 'soap:Body))))
 
       (let ((fault (car (soap-xml-get-children1 body 'soap:Fault))))
@@ -1235,7 +1275,7 @@ is to be encoded.
 This is a generic function which finds an encoder function based
 on TYPE and calls that encoder to do the work."
   (let ((encoder (get (aref type 0) 'soap-encoder)))
-    (assert encoder)
+    (assert encoder nil "no soap-encoder for %s type" (aref type 0))
     ;; XML-TAG can be a string or a symbol, but we pass only string's to the
     ;; encoders
     (when (symbolp xml-tag)
