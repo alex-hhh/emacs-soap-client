@@ -1,3 +1,12 @@
+2011-02-04  Alex Harsanyi  <AlexHarsanyi@gmail.com>
+
+	* soap-client.el (soap-parse-wsdl, soap-parse-schema)
+	(soap-parse-schema-element, soap-parse-complex-type)
+	(soap-parse-sequence, soap-parse-complex-type-complex-content)
+	(soap-parse-message, soap-parse-port-type, soap-parse-operation)
+	(soap-parse-binding, soap-parse-envelope, soap-encode-value): add
+	a helpful message to the assert calls
+
 2011-01-03  Alex Harsanyi  <AlexHarsanyi@gmail.com>
 
 	* soap-client.el (soap-xml-get-children1)
