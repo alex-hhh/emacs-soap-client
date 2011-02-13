@@ -1,3 +1,7 @@
+2011-02-13  Alex Harsanyi  <AlexHarsanyi@gmail.com>
+
+	* soap-client.el: fixes suggested by `checkdoc' and spelling fixes
+
 2011-02-07  Alex Harsanyi  <AlexHarsanyi@gmail.com>
 
 	* soap-client.el: 53 some fixes suggested by `checkdoc'

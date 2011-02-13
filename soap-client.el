@@ -45,7 +45,7 @@
 
 ;;;; Support for parsing XML documents with namespaces
 
-;; XML documents with namespaces are dificult to parse because the names of
+;; XML documents with namespaces are difficult to parse because the names of
 ;; the nodes depend on what "xmlns" aliases have been defined in the document.
 ;; To work with such documents, we introduce a translation layer between a
 ;; "well known" namespace tag and the local namespace tag in the document
@@ -86,7 +86,7 @@ dynamically bound variable, controlled by
   "Return local variant of WELL-KNOWN-NAME.
 This is done by looking up the namespace in the
 `*soap-well-known-xmlns*' table and resolving the namespace to
-the local name based on the current local translation tabble
+the local name based on the current local translation table
 `*soap-local-xmlns*'.  See also `soap-with-local-xmlns'."
   (let ((wk-name-1 (if (symbolp well-known-name)
                        (symbol-name well-known-name)
@@ -227,7 +227,7 @@ This is the namespace in which new elements will be defined."
 
 (defun soap-xml-get-children1 (node child-name)
   "Return the children of NODE named CHILD-NAME.
-Thi is the same as `xml-get-children', but CHILD-NAME can have
+This is the same as `xml-get-children', but CHILD-NAME can have
 namespace tag."
   (let (result)
     (dolist (c (xml-node-children node))
@@ -319,18 +319,18 @@ added to the namespace."
   (push (make-soap-namespace-link :name name :target target)
         (gethash name (soap-namespace-elements ns))))
 
-(defun soap-namespace-get (name ns &optional discrimninant-predicate)
+(defun soap-namespace-get (name ns &optional discriminant-predicate)
   "Retrieve an element with NAME from the namespace NS.
 If multiple elements with the same name exist,
-DISCRIMNINANT-PREDICATE is used to pick one of them.  This allows
+DISCRIMINANT-PREDICATE is used to pick one of them.  This allows
 storing elements of different types (like a message type and a
 binding) but the same name."
   (assert (stringp name))
   (let ((elements (gethash name (soap-namespace-elements ns))))
-    (cond (discrimninant-predicate
+    (cond (discriminant-predicate
            (catch 'found
              (dolist (e elements)
-               (when (funcall discrimninant-predicate e)
+               (when (funcall discriminant-predicate e)
                  (throw 'found e)))))
           ((= (length elements) 1) (car elements))
           ((> (length elements) 1)
@@ -409,7 +409,7 @@ binding) but the same name."
     ns))
 
 (defun soap-type-p (element)
-  "Return t if ELEMENT is a SOAP datatype (basic or complex)."
+  "Return t if ELEMENT is a SOAP data type (basic or complex)."
   (or (soap-basic-type-p element)
       (soap-sequence-type-p element)
       (soap-array-type-p element)))
@@ -489,7 +489,7 @@ used to resolve the namespace alias."
              
              (setq namespace (soap-wsdl-find-namespace ns-name wsdl))
              (unless namespace
-               (error "Soap-wsdl-get(%s): unknown namespace %s, refered by alias %s"
+               (error "Soap-wsdl-get(%s): unknown namespace %s, referenced by alias %s"
                       name ns-name ns-alias))))
           (t
            (error "Soap-wsdl-get(%s): bad name" name)))
@@ -545,7 +545,7 @@ See also `soap-resolve-references-for-element' and
              ;; since the element already has a child element, it
              ;; could be an inline structure.  we must resolve
              ;; references in it, because it might not be reached by
-             ;; scaning the wsdl names.
+             ;; scanning the wsdl names.
              (soap-resolve-references-for-element element-type wsdl))))))
 
 (defun soap-resolve-references-for-array-type (type wsdl)
@@ -772,7 +772,7 @@ traverse an element tree."
 
       (let ((types (car (soap-xml-get-children1 node 'wsdl:types))))
         (dolist (node (xml-node-children types))
-          ;; We cannot use (xml-get-children node (soap-wk2l 'xsd:schama))
+          ;; We cannot use (xml-get-children node (soap-wk2l 'xsd:schema))
           ;; because each node can install its own alias type so the schema
           ;; nodes might have a different prefix.
           (when (consp node)
@@ -811,7 +811,7 @@ traverse an element tree."
 
 (defun soap-parse-schema (node)
   "Parse a schema NODE.
-Return a SOAP-NAMESPACE containg the elements."
+Return a SOAP-NAMESPACE containing the elements."
   (soap-with-local-xmlns node
     (assert (eq (soap-l2wk (xml-node-name node)) 'xsd:schema)
             nil
@@ -934,7 +934,7 @@ contents."
              (let ((base (xml-get-attribute-or-nil restriction 'base)))
                (assert (equal base "soapenc:Array")
                        nil
-                       "restrictions suported only for soapenc:Array types, this is a %s"
+                       "restrictions supported only for soapenc:Array types, this is a %s"
                        base))
              (setq array? t)
              (let ((attribute (car (soap-xml-get-children1 restriction 'xsd:attribute))))
@@ -1061,7 +1061,7 @@ contents."
 
           ;; Search a wsdlsoap:body node and find a "use" tag.  The
           ;; same use tag is assumed to be present for both input and
-          ;; output types (alhtough the WDSL spec allows separate
+          ;; output types (although the WDSL spec allows separate
           ;; "use"-s for each of them...
 
           (dolist (i (soap-xml-get-children1 wo 'wsdl:input))
@@ -1081,15 +1081,29 @@ contents."
                    (soap-binding-operations binding))))
       binding)))
 
-;;;;; Describe WSDL operations
 ;;;; SOAP type decoding
 
-(defvar *soap-multi-refs*)
-(defvar *soap-decoded-multi-refs*)
-(defvar *current-wsdl*)
+(defvar *soap-multi-refs* nil
+  "The list of multi-ref nodes in the current SOAP response.
+This is a dynamically bound variable used during decoding the
+SOAP response.")
+
+(defvar *soap-decoded-multi-refs* nil
+  "List of decoded multi-ref nodes in the current SOAP response.
+This is a dynamically bound variable used during decoding the
+SOAP response.")
+
+(defvar *current-wsdl* nil
+  "The current WSDL document used when decoding the SOAP response.
+This is a dynamically bound variable.")
 
 (defun soap-decode-type (type node)
-  "Use TYPE (an xsd type) to decode the contents of NODE."
+  "Use TYPE (an xsd type) to decode the contents of NODE.
+
+NODE is an XML node, representing some SOAP encoded value or a
+reference to another XML node (a multiRef).  This function will
+resolve the multiRef reference, if any, than call a TYPE specific
+decode function to perform the actual decoding."
   (let ((href (xml-get-attribute-or-nil node 'href)))
     (cond (href
            (catch 'done
@@ -1171,6 +1185,10 @@ contents."
     (nreverse result)))
 
 (defun soap-decode-basic-type (type node)
+  "Use TYPE to decode the contents of NODE.
+TYPE is a `soap-basic-type' struct, and NODE is an XML document.
+A LISP value is returned based on the contents of NODE and the
+type-info stored in TYPE."
   (let ((contents (xml-node-children node))
         (type-kind (soap-basic-type-kind type)))
 
@@ -1186,6 +1204,9 @@ contents."
           (Array (soap-decode-array node))))))
 
 (defun soap-decode-sequence-type (type node)
+  "Use TYPE to decode the contents of NODE.
+TYPE is assumed to be a sequence type and an ALIST with the
+contents of the NODE is returned."
   (let ((result nil)
         (parent (soap-sequence-type-parent type)))
     (when parent
@@ -1209,7 +1230,8 @@ contents."
     (nreverse result)))
 
 (defun soap-decode-array-type (type node)
-  "Arrays are decoded as lists.
+  "Use TYPE to decode the contents of NODE.
+TYPE is assumed to be an array type.  Arrays are decoded as lists.
 This is because it is easier to work with list results in LISP."
   (let ((result nil)
         (element-type (soap-array-type-element-type type)))
@@ -1234,6 +1256,9 @@ This is because it is easier to work with list results in LISP."
 (put 'soap-error 'error-message "SOAP error")
 
 (defun soap-parse-envelope (node operation wsdl)
+  "Parse the SOAP envelope in NODE and return the response.
+OPERATION is the WSDL operation for which we expect the response,
+WSDL is used to decode the NODE"
   (soap-with-local-xmlns node
     (assert (eq (soap-l2wk (xml-node-name node)) 'soap:Envelope)
             nil
@@ -1264,6 +1289,13 @@ This is because it is easier to work with list results in LISP."
         (soap-parse-response response operation wsdl body)))))
 
 (defun soap-parse-response (response-node operation wsdl soap-body)
+  "Parse RESPONSE-NODE and return the result as a LISP value.
+OPERATION is the WSDL operation for which we expect the response,
+WSDL is used to decode the NODE.
+
+SOAP-BODY is the body of the SOAP envelope (of which
+RESPONSE-NODE is a sub-node).  It is used in case RESPONSE-NODE
+reference multiRef parts which are external to RESPONSE-NODE."
   (let* ((*current-wsdl* wsdl)
          (op (soap-bound-operation-operation operation))
          (use (soap-bound-operation-use operation))
@@ -1323,11 +1355,13 @@ This variable is dynamically bound in `soap-create-envelope'.")
 
 (defun soap-encode-value (xml-tag value type)
   "Encode inside an XML-TAG the VALUE using TYPE.
-TYPE is one of the soap-*-type structures which defines how VALUE
-is to be encoded.
+The resulting XML data is inserted in the current buffer
+at (point)/
 
-This is a generic function which finds an encoder function based
-on TYPE and calls that encoder to do the work."
+TYPE is one of the soap-*-type structures which defines how VALUE
+is to be encoded.  This is a generic function which finds an
+encoder function based on TYPE and calls that encoder to do the
+work."
   (let ((encoder (get (aref type 0) 'soap-encoder)))
     (assert encoder nil "no soap-encoder for %s type" (aref type 0))
     ;; XML-TAG can be a string or a symbol, but we pass only string's to the
@@ -1338,6 +1372,9 @@ on TYPE and calls that encoder to do the work."
   (add-to-list '*soap-encoded-namespaces* (soap-element-namespace-tag type)))
 
 (defun soap-encode-basic-type (xml-tag value type)
+  "Encode inside XML-TAG the LISP VALUE according to TYPE.
+Do not call this function directly, use `soap-encode-value'
+instead."
   (let ((xsi-type (soap-element-fq-name type))
         (basic-type (soap-basic-type-kind type)))
 
@@ -1357,7 +1394,7 @@ on TYPE and calls that encoder to do the work."
     (insert "<" xml-tag " xsi:type=\"" xsi-type "\"")
 
     ;; We have some ambiguity here, as a nil value represents "false" when the
-    ;; type is boolean, we will never have a "nil" bolean type...
+    ;; type is boolean, we will never have a "nil" boolean type...
 
     (if (or value (eq basic-type 'boolean))
         (progn
@@ -1408,6 +1445,9 @@ on TYPE and calls that encoder to do the work."
     (insert "</" xml-tag ">\n")))
 
 (defun soap-encode-sequence-type (xml-tag value type)
+  "Encode inside XML-TAG the LISP VALUE according to TYPE.
+Do not call this function directly, use `soap-encode-value'
+instead."
   (let ((xsi-type (soap-element-fq-name type)))
     (insert "<" xml-tag " xsi:type=\"" xsi-type "\"")
     (if value
@@ -1443,6 +1483,9 @@ on TYPE and calls that encoder to do the work."
     (insert "</" xml-tag ">\n")))
 
 (defun soap-encode-array-type (xml-tag value type)
+  "Encode inside XML-TAG the LISP VALUE according to TYPE.
+Do not call this function directly, use `soap-encode-value'
+instead."
   (unless (vectorp value)
     (error "Soap-encode: %s(%s) expects a vector, got: %s"
            xml-tag (soap-element-fq-name type) value))
@@ -1465,6 +1508,11 @@ on TYPE and calls that encoder to do the work."
        'soap-encoder 'soap-encode-array-type))
 
 (defun soap-encode-body (operation parameters wsdl)
+  "Create the body of a SOAP request for OPERATION in the current buffer.
+PARAMETERS is a list of parameters supplied to the OPERATION.
+
+The OPERATION and PARAMETERS are encoded according to the WSDL
+document."
   (let* ((op (soap-bound-operation-operation operation))
          (use (soap-bound-operation-use operation))
          (message (cdr (soap-operation-input op)))
@@ -1509,7 +1557,9 @@ on TYPE and calls that encoder to do the work."
       (insert "</" (soap-element-fq-name op) ">\n"))
     (insert "</soap:Body>\n")))
 
-(defun soap-create-envelope (wsdl operation parameters)
+(defun soap-create-envelope (operation parameters wsdl)
+  "Create a SOAP request envelope for OPERATION using PARAMETERS.
+WSDL is the wsdl document used to encode the PARAMETERS."
   (with-temp-buffer
     (let ((*soap-encoded-namespaces* '("xsi" "soap" "soapenc"))
           (use (soap-bound-operation-use operation)))
@@ -1538,11 +1588,28 @@ on TYPE and calls that encoder to do the work."
 ;;;; invoking soap methods
 
 (defcustom soap-debug nil
-  "When t, enable some debugging facilities"
+  "When t, enable some debugging facilities."
   :type 'boolean
   :group 'soap-client)
 
 (defun soap-invoke (wsdl service operation-name &rest parameters)
+  "Invoke a SOAP operation and return the result.
+
+WSDL is used for encoding the request and decoding the response.
+It also contains information about the WEB server address that
+will service the request.
+
+SERVICE is the SOAP service to invoke.
+
+OPERATION-NAME is the operation to invoke.
+
+PARAMETERS -- the remaining parameters are used as parameters for
+the SOAP request.
+
+NOTE: The SOAP service provider should document the available
+operations and their parameters for the service.  You can also
+use the `soap-inspect' function to browse the available
+operations in a WSDL document."
   (let ((port (catch 'found
                 (dolist (p (soap-wsdl-ports wsdl))
                   (when (equal service (soap-element-name p))
@@ -1559,7 +1626,7 @@ on TYPE and calls that encoder to do the work."
             (url-package-name "esoap.el")
             (url-package-version "1.0")
             (url-http-version "1.0")
-            (url-request-data (soap-create-envelope wsdl operation parameters))
+            (url-request-data (soap-create-envelope operation parameters wsdl))
             (url-mime-charset-string "utf-8;q=1, iso-8859-1;q=0.5")
             (url-request-coding-system 'utf-8)
             (url-http-attempt-keepalives t)
