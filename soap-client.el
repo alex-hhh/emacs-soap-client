@@ -1,6 +1,6 @@
 ;;;; soap.el -- Access SOAP web services from Emacs
 
-;; Copyright (C) 2009, 2010, 2011  Alex Harsanyi <AlexHarsanyi@gmail.com>
+;; Copyright (C) 2009-2011  Alex Harsanyi <AlexHarsanyi@gmail.com>
 
 ;; This program is free software: you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -1107,7 +1107,7 @@ SOAP response.")
 This is a dynamically bound variable used during decoding the
 SOAP response.")
 
-(defvar *current-wsdl* nil
+(defvar *soap-current-wsdl* nil
   "The current WSDL document used when decoding the SOAP response.
 This is a dynamically bound variable.")
 
@@ -1152,7 +1152,7 @@ decode function to perform the actual decoding."
   ;; If the NODE has type information, we use that...
   (let ((type (soap-xml-get-attribute-or-nil1 node 'xsi:type)))
     (if type
-        (let ((wtype (soap-wsdl-get type *current-wsdl* 'soap-type-p)))
+        (let ((wtype (soap-wsdl-get type *soap-current-wsdl* 'soap-type-p)))
           (if wtype
               (soap-decode-type wtype node)
               ;; The node has type info encoded in it, but we don't know how
@@ -1185,7 +1185,7 @@ decode function to perform the actual decoding."
         ;; Type is in the format "someType[NUM]" where NUM is the number of
         ;; elements in the array.  We discard the [NUM] part.
         (setq type (replace-regexp-in-string "\\[[0-9]+\\]\\'" "" type))
-        (setq wtype (soap-wsdl-get type *current-wsdl* 'soap-type-p))
+        (setq wtype (soap-wsdl-get type *soap-current-wsdl* 'soap-type-p))
         (unless wtype
           ;; The node has type info encoded in it, but we don't know how to
           ;; decode it...
@@ -1310,7 +1310,7 @@ WSDL is used to decode the NODE.
 SOAP-BODY is the body of the SOAP envelope (of which
 RESPONSE-NODE is a sub-node).  It is used in case RESPONSE-NODE
 reference multiRef parts which are external to RESPONSE-NODE."
-  (let* ((*current-wsdl* wsdl)
+  (let* ((*soap-current-wsdl* wsdl)
          (op (soap-bound-operation-operation operation))
          (use (soap-bound-operation-use operation))
          (message (cdr (soap-operation-output op))))
@@ -1637,7 +1637,7 @@ operations in a WSDL document."
         (error "No operation %s for SOAP service %s" operation-name service))
 
       (let ((url-request-method "POST")
-            (url-package-name "esoap.el")
+            (url-package-name "soap-client.el")
             (url-package-version "1.0")
             (url-http-version "1.0")
             (url-request-data (soap-create-envelope operation parameters wsdl))
