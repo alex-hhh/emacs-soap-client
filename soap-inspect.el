@@ -1,28 +1,29 @@
 ;;;; soap-inspect.el -- Interactive inspector for soap WSDL structures
 
-;; Copyright (C) 2010-2011  Alex Harsanyi <AlexHarsanyi@gmail.com>
+;; Copyright (C) 2010-2011  Free Software Foundation, Inc.
 
-;; This program is free software: you can redistribute it and/or modify
+;; Author: Alexandru Harsanyi (AlexHarsanyi@gmail.com)
+;; Created: October 2010
+;; Keywords: soap, web-services, comm, hypermedia
+;; Homepage: http://code.google.com/p/emacs-soap-client
+
+;; This file is part of GNU Emacs.
+
+;; GNU Emacs is free software: you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
 ;; the Free Software Foundation, either version 3 of the License, or
 ;; (at your option) any later version.
 
-;; This program is distributed in the hope that it will be useful,
+;; GNU Emacs is distributed in the hope that it will be useful,
 ;; but WITHOUT ANY WARRANTY; without even the implied warranty of
 ;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with this program.  If not, see <http://www.gnu.org/licenses/>.
-
-;; Author: Alexandru Harsanyi (AlexHarsanyi@gmail.com)
-;; Created: October 2010
-;; Keywords: soap, web-services
-;; Homepage: http://code.google.com/p/emacs-soap-client
-;;
+;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
 
 ;;; Commentary:
-;; 
+;;
 ;; This package provides an inspector for a WSDL document loaded with
 ;; `soap-load-wsdl' or `soap-load-wsdl-from-url'.  To use it, evaluate:
 ;;
@@ -32,10 +33,12 @@
 ;; and types to explore the structure of the wsdl document.
 ;;
 
-(require 'soap-client)
-
 
 ;;; Code:
+
+(eval-when-compile (require 'cl))
+
+(require 'soap-client)
 
 ;;; sample-value
 
@@ -148,12 +151,12 @@ entire WSDL can be inspected."
       (setq buffer-read-only t)
       (let ((inhibit-read-only t))
         (erase-buffer)
-        
+
         (when soap-inspect-current-item
           (push soap-inspect-current-item
                 soap-inspect-previous-items))
         (setq soap-inspect-current-item element)
-        
+
         (funcall inspect element)
 
         (unless (null soap-inspect-previous-items)
@@ -252,11 +255,13 @@ entire WSDL can be inspected."
     (insert "\tOutput: " (symbol-name (car output)) " (")
     (soap-insert-describe-button (cdr output))
     (insert ")\n"))
-  
+
   (insert "\n\nSample invocation:\n")
-  (let ((sample-message-value (soap-sample-value (cdr (soap-operation-input operation))))
+  (let ((sample-message-value
+	 (soap-sample-value (cdr (soap-operation-input operation))))
         (funcall (list 'soap-invoke '*WSDL* "SomeService" (soap-element-name operation))))
-    (let ((sample-invocation (append funcall (mapcar 'cdr sample-message-value))))
+    (let ((sample-invocation
+	   (append funcall (mapcar 'cdr sample-message-value))))
       (pp sample-invocation (current-buffer)))))
 
 (defun soap-inspect-port-type (port-type)
@@ -335,7 +340,7 @@ entire WSDL can be inspected."
        'soap-inspect-message)
   (put (aref (make-soap-operation) 0) 'soap-inspect
        'soap-inspect-operation)
-  
+
   (put (aref (make-soap-port-type) 0) 'soap-inspect
        'soap-inspect-port-type)
 
