@@ -368,5 +368,13 @@ installation can define its own link types."
   "Return the status of ISSUE as a status string (not as a number!)"
   (let ((status-code (cdr (assq 'status issue))))
     (cdr (assoc status-code (jira2-get-statuses)))))
+
+(defun jira2-custom-field-value (custom-field issue)
+  "Return the value of CUSTOM-FIELD for ISSUE.
+Return nil if the field is not found"
+  (catch 'found
+    (dolist (field (cdr (assq 'customFieldValues issue)))
+      (when (equal (cdr (assq 'customfieldId field)) custom-field)
+        (throw 'found (cadr (assq 'values field)))))))
   
 (provide 'jira2)
