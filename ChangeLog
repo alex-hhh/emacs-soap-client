@@ -1,5 +1,12 @@
 2011-11-02  Alex Harsanyi  <AlexHarsanyi@gmail.com>
 
+	* soap-client.el (soap-default-xsd-types)
+	(soap-default-soapenc-types): add integer, byte and anyURI types
+	(soap-parse-complex-type-complex-content): use `soap-wk2l' to find
+	the local name of "soapenc:Array"
+	(soap-decode-basic-type, soap-encode-basic-type): support encoding
+	decoding integer, byte and anyURI xsd types.
+
 	* jira2.el (jira2-custom-field-value): new function
 
 2011-03-05  Alex Harsanyi  <AlexHarsanyi@gmail.com>

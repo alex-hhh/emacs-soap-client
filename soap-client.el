@@ -413,8 +413,9 @@ binding) but the same name."
 (defun soap-default-xsd-types ()
   "Return a namespace containing some of the XMLSchema types."
   (let ((ns (make-soap-namespace :name "http://www.w3.org/2001/XMLSchema")))
-    (dolist (type '("string" "dateTime" "boolean" "long" "int" "float"
-                    "base64Binary" "anyType" "Array" "byte[]"))
+    (dolist (type '("string" "dateTime" "boolean" 
+                    "long" "int" "integer" "byte" "float"
+                    "base64Binary" "anyType" "anyURI" "Array" "byte[]"))
       (soap-namespace-put
        (make-soap-basic-type :name type :kind (intern type))
        ns))
@@ -424,8 +425,9 @@ binding) but the same name."
   "Return a namespace containing some of the SOAPEnc types."
   (let ((ns (make-soap-namespace
 	     :name "http://schemas.xmlsoap.org/soap/encoding/")))
-    (dolist (type '("string" "dateTime" "boolean" "long" "int" "float"
-                    "base64Binary" "anyType" "Array" "byte[]"))
+    (dolist (type '("string" "dateTime" "boolean" 
+                    "long" "int" "integer" "byte" "float"
+                    "base64Binary" "anyType" "anyURI" "Array" "byte[]"))
       (soap-namespace-put
        (make-soap-basic-type :name type :kind (intern type))
        ns))
@@ -975,7 +977,7 @@ contents."
 				   extension 'xsd:sequence)))))
             (restriction
              (let ((base (xml-get-attribute-or-nil restriction 'base)))
-               (assert (equal base "soapenc:Array")
+               (assert (equal base (soap-wk2l "soapenc:Array"))
                        nil
                        "restrictions supported only for soapenc:Array types, this is a %s"
                        base))
@@ -1245,9 +1247,9 @@ type-info stored in TYPE."
     (if (null contents)
         nil
         (ecase type-kind
-          (string (car contents))
+          ((string anyURI) (car contents))
           (dateTime (car contents))     ; TODO: convert to a date time
-          ((long int float) (string-to-number (car contents)))
+          ((long int integer byte float) (string-to-number (car contents)))
           (boolean (string= (downcase (car contents)) "true"))
           (base64Binary (base64-decode-string (car contents)))
           (anyType (soap-decode-any-type node))
@@ -1457,7 +1459,7 @@ instead."
         (progn
           (insert ">")
           (case basic-type
-            (string
+            ((string anyURI)
              (unless (stringp value)
                (error "Soap-encode-basic-type(%s, %s, %s): not a string value"
                       xml-tag value xsi-type))
@@ -1484,7 +1486,7 @@ instead."
                       xml-tag value xsi-type))
              (insert (if value "true" "false")))
 
-            ((long int)
+            ((long int integer byte)
              (unless (integerp value)
                (error "Soap-encode-basic-type(%s, %s, %s): not an integer value"
                       xml-tag value xsi-type))
