@@ -2,9 +2,10 @@
 
 ;; Copyright (C) 2009-2011  Free Software Foundation, Inc.
 
-;; Author: Alexandru Harsanyi (AlexHarsanyi@gmail.com)
+;; Author: Alexandru Harsanyi <AlexHarsanyi@gmail.com>
 ;; Created: December, 2009
 ;; Keywords: soap, web-services, comm, hypermedia
+;; Package: soap-client
 ;; Homepage: http://code.google.com/p/emacs-soap-client
 
 ;; This file is part of GNU Emacs.
@@ -31,7 +32,7 @@
 ;; `soap-invoke' method passing it the WSDL, the service name, the operation
 ;; you wish to invoke and any required parameters.
 ;;
-;; Idealy, the service you want to access will have some documentation about
+;; Ideally, the service you want to access will have some documentation about
 ;; the operations it supports.  If it does not, you can try using
 ;; `soap-inspect' to browse the WSDL document and see the available operations
 ;; and their parameters.
@@ -375,7 +376,7 @@ binding) but the same name."
 
 (defstruct (soap-sequence-type (:include soap-element))
   parent                                ; OPTIONAL WSDL-TYPE name
-  elements                              ; LIST of SOAP-SEQUCENCE-ELEMENT
+  elements                              ; LIST of SOAP-SEQUENCE-ELEMENT
   )
 
 (defstruct (soap-array-type (:include soap-element))
@@ -753,9 +754,7 @@ traverse an element tree."
                               (incf nprocessed)
                               (soap-resolve-references-for-element e wsdl)
                               (setf (soap-element-namespace-tag e) nstag))))))
-                 (soap-namespace-elements ns))))
-
-    (message "Processed %d" nprocessed))
+                 (soap-namespace-elements ns)))))
     wsdl)
 
 ;;;;; Loading WSDL from XML documents
@@ -1793,10 +1792,6 @@ operations in a WSDL document."
                     ;; error)
                     (warn "Error in SOAP response: HTTP code %s"
                           url-http-response-status))
-                                 (when (> (buffer-size) 1000000)
-                                   (soap-warning
-                                    "Received large message: %s bytes"
-                                    (buffer-size)))
                 (let ((mime-part (mm-dissect-buffer t t)))
                   (unless mime-part
                     (error "Failed to decode response from server"))
