@@ -1375,9 +1375,7 @@ WSDL is used to decode the NODE"
                 (fault-string (let ((n (car (xml-get-children
                                              fault 'faultstring))))
                                 (car-safe (xml-node-children n))))
-                (detail (let ((n (car (xml-get-children
-                                       fault 'detail))))
-                          (car-safe (xml-node-children n)))))
+                (detail (xml-get-children fault 'detail)))
           (while t
             (signal 'soap-error (list fault-code fault-string detail))))))
 
