@@ -5,6 +5,8 @@
 	references, see Bug#9.
 	(soap-parse-envelope): report the contents of the 'detail' node
 	when receiving a fault reply.
+	(soap-parse-envelope): report the contents of the entire 'detail'
+	node.
 
 2011-12-21  Alex Harsanyi  <AlexHarsanyi@gmail.com>
 
