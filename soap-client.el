@@ -759,10 +759,16 @@ traverse an element tree."
 
 ;;;;; Loading WSDL from XML documents
 
-(defun soap-load-wsdl-from-url (url)
-  "Load a WSDL document from URL and return it.
-The returned WSDL document needs to be used for `soap-invoke'
-calls."
+(defvar soap-base-url nil
+  "The base url from which we load imported documents.
+This variable is dynamically bound while loading WSDL documents.")
+
+(defvar soap-import-loader-function nil
+  "Function used to load imported documents.
+This variable is dynamically bound while loading WSDL documents.")
+
+(defun soap-load-xml-from-url (url)
+  (message "Loading xml from %s" url)
   (let ((url-request-method "GET")
         (url-package-name "soap-client.el")
         (url-package-version "1.0")
@@ -781,21 +787,38 @@ calls."
             (error "Server response is not an XML document"))
           (with-temp-buffer
             (mm-insert-part mime-part)
-            (let ((wsdl-xml (car (xml-parse-region (point-min) (point-max)))))
-              (prog1
-                  (let ((wsdl (soap-parse-wsdl wsdl-xml)))
-                    (setf (soap-wsdl-origin wsdl) url)
-                    wsdl)
-                (kill-buffer buffer)))))))))
+            (prog1 (car (xml-parse-region (point-min) (point-max)))
+              (kill-buffer buffer))))))))
 
-(defun soap-load-wsdl (file)
-  "Load a WSDL document from FILE and return it."
+(defun soap-load-xml-from-file (file)
+  (message "Loading xml from %s" file)
   (with-temp-buffer
     (insert-file-contents file)
-    (let ((xml (car (xml-parse-region (point-min) (point-max)))))
-      (let ((wsdl (soap-parse-wsdl xml)))
-        (setf (soap-wsdl-origin wsdl) file)
-        wsdl))))
+    (car (xml-parse-region (point-min) (point-max)))))
+
+(defun soap-load-wsdl-from-url (url)
+  "Load a WSDL document from URL and return it.
+The returned WSDL document needs to be used for `soap-invoke'
+calls."
+  (let ((soap-base-url (file-name-directory url))
+        (soap-import-loader-function #'soap-load-xml-from-url)
+        (wsdl-xml (soap-load-xml-from-url url)))
+    (let ((wsdl (soap-parse-wsdl wsdl-xml)))
+      (setf (soap-wsdl-origin wsdl) url)
+      wsdl)))
+    
+(defun soap-load-wsdl (file)
+  "Load a WSDL document from FILE and return it."
+  (let ((soap-base-url (file-name-directory file))
+        (soap-import-loader-function #'soap-load-xml-from-file)
+        (wsdl-xml (soap-load-xml-from-file file)))
+    (let ((wsdl (soap-parse-wsdl wsdl-xml)))
+      (setf (soap-wsdl-origin wsdl) file)
+      wsdl)))
+
+(defvar soap-delayed-imports nil
+  "List of imports from soap namespaces to be processed later.
+This file is dynamically bound while parsing the WSDL xml document.")
 
 (defun soap-parse-wsdl (node)
   "Construct a WSDL structure from NODE, which is an XML document."
@@ -806,7 +829,8 @@ calls."
             "soap-parse-wsdl: expecting wsdl:definitions node, got %s"
             (soap-l2wk (xml-node-name node)))
 
-    (let ((wsdl (make-soap-wsdl)))
+    (let ((wsdl (make-soap-wsdl))
+          (soap-deferred-imports nil))
 
       ;; Add the local alias table to the wsdl document -- it will be used for
       ;; all types in this document even after we finish parsing it.
@@ -834,6 +858,12 @@ calls."
             (soap-with-local-xmlns node
               (when (eq (soap-l2wk (xml-node-name node)) 'xsd:schema)
                 (soap-wsdl-add-namespace (soap-parse-schema node) wsdl))))))
+
+      (while soap-delayed-imports
+        (let* ((import (pop soap-delayed-imports))
+               (schema-xml (funcall soap-import-loader-function (concat soap-base-url import))))
+          (soap-with-local-xmlns schema-xml
+            (soap-wsdl-add-namespace (soap-parse-schema schema-xml) wsdl))))
 
       (let ((ns (make-soap-namespace :name (soap-get-target-namespace node))))
         (dolist (node (soap-xml-get-children1 node 'wsdl:message))
@@ -876,8 +906,14 @@ Return a SOAP-NAMESPACE containing the elements."
             "soap-parse-schema: expecting an xsd:schema node, got %s"
             (soap-l2wk (xml-node-name node)))
     (let ((ns (make-soap-namespace :name (soap-get-target-namespace node))))
-      ;; NOTE: we only extract the complexTypes from the schema, we wouldn't
-      ;; know how to handle basic types beyond the built in ones anyway.
+
+      ;; Imports are processed later, since a new namespace has to be created
+      ;; for them.
+      (dolist (import (soap-xml-get-children1 node 'xsd:import))
+        (let ((schema-location (xml-get-attribute-or-nil import 'schemaLocation)))
+          (when schema-location
+            (push schema-location soap-delayed-imports))))
+
       (dolist (node (soap-xml-get-children1 node 'xsd:simpleType))
         (soap-namespace-put (soap-parse-simple-type node) ns))
 

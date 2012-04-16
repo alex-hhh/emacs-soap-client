@@ -1,3 +1,17 @@
+2012-04-16  Alex Harsanyi  <AlexHarsanyi@gmail.com>
+
+	* soap-client.el (soap-base-url, soap-import-loader-function): new
+	variables.
+	(soap-load-xml-from-url, soap-load-xml-from-file): new functions
+	(soap-load-wsdl-from-url): use `soap-load-xml-from-url' to load
+	the document.
+	(soap-load-wsdl): use `soap-load-xml-from-file' to load the
+	document.
+	(soap-delayed-imports): new variable
+	(soap-parse-schema): record all encountered imports into
+	`soap-delayed-imports'
+	(soap-parse-wsdl): load the imports after parsing the xml schemas
+
 2011-12-30  Alex Harsanyi  <AlexHarsanyi@gmail.com>
 
 	* soap-client.el (soap-resolve-references-for-sequence-type)
