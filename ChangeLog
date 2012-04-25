@@ -1,3 +1,20 @@
+2012-04-25  Alex Harsanyi  <AlexHarsanyi@gmail.com>
+
+	* soap-client.el (soap-xsd-element, soap-choice-type): new
+	structures
+	(soap-resolve-references-for-sequence-type): handle a "ref" to an
+	xsd-element
+	(soap-resolve-references-for-choice-type)
+	(soap-resolve-references-for-xsd-element-type): new functions
+	(soap-parse-schema-element): construct an xsd-element
+	(soap-parse-complex-type): parse "choice" declarations
+	(soap-parse-sequence): parse the sequence for xsd:coice type too,
+	also accept "ref" sequence elements.
+	(soap-parse-complex-type-choice): construct a soap-choice-type
+	from an std:choice node.
+	(soap-parse-complex-type-complex-content): accept a complex type
+	with no content.
+
 2012-04-16  Alex Harsanyi  <AlexHarsanyi@gmail.com>
 
 	* soap-client.el (soap-base-url, soap-import-loader-function): new
