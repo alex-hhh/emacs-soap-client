@@ -371,12 +371,23 @@ binding) but the same name."
 (defstruct (soap-simple-type (:include soap-basic-type))
   enumeration)
 
+;; Map an <xsd:element name="..." type="..."/>.  These name-type pairs can be
+;; referenced by other elements by the "ref" attribute.
+(defstruct (soap-xsd-element (:include soap-element))
+  type)
+
 (defstruct soap-sequence-element
   name type nillable? multiple?)
 
 (defstruct (soap-sequence-type (:include soap-element))
   parent                                ; OPTIONAL WSDL-TYPE name
   elements                              ; LIST of SOAP-SEQUENCE-ELEMENT
+  )
+
+(defstruct (soap-choice-type (:include soap-element))
+  nillable?
+  multiple?
+  choices                               ; LIST of SOAP-SEQUENCE-ELEMENT
   )
 
 (defstruct (soap-array-type (:include soap-element))
@@ -581,6 +592,17 @@ See also `soap-resolve-references-for-element' and
              (lambda (e) (and (not (eq e type)) (soap-type-p e)))))))
   (dolist (element (soap-sequence-type-elements type))
     (let ((element-type (soap-sequence-element-type element)))
+
+      (when (null (soap-sequence-element-name element))
+        ;; type references a soap-xsd-element, replace the ref and continue
+        ;; with the referencing below.
+        (let ((xsd-element (soap-wsdl-get element-type wsdl 'soap-xsd-element-p)))
+          (when xsd-element
+            (setf (soap-sequence-element-name element)
+                  (soap-xsd-element-name xsd-element))
+            (setf (soap-sequence-element-type element)
+                  (soap-xsd-element-type xsd-element)))))
+
       (cond ((or (consp element-type) (stringp element-type))
              (setf (soap-sequence-element-type element)
                    (soap-wsdl-get
@@ -594,6 +616,33 @@ See also `soap-resolve-references-for-element' and
              ;; scanning the wsdl names.
              (soap-resolve-references-for-element element-type wsdl))))))
 
+(defun soap-resolve-references-for-choice-type (type wsdl)
+  "Resolve references for a choice TYPE using WSDL document.
+See also `soap-resolve-references-for-element' and
+`soap-wsdl-resolve-references'"
+  (dolist (element (soap-choice-type-choices type))
+    (let ((element-type (soap-sequence-element-type element)))
+      (cond ((or (consp element-type) (stringp element-type))
+             (setf (soap-sequence-element-type element)
+                   (soap-wsdl-get
+                    element-type wsdl
+                    ;; Prevent self references, see Bug#9
+                    (lambda (e) (and (not (eq e type)) (soap-type-p e))))))
+            ((soap-element-p element-type)
+             ;; since the element already has a child element, it
+             ;; could be an inline structure.  we must resolve
+             ;; references in it, because it might not be reached by
+             ;; scanning the wsdl names.
+             (soap-resolve-references-for-element element-type wsdl))))))
+
+(defun soap-resolve-references-for-xsd-element-type (type wsdl)
+  "Resolve references for the xsd element TYPE using WSDL document.
+See also `soap-resolve-references-for-element' and
+`soap-wsdl-resolve-references'"
+  (let ((type-name (soap-xsd-element-type type)))
+    (when (stringp type-name)
+      (setf (soap-xsd-element-type type) (soap-wsdl-get type-name wsdl)))))
+  
 (defun soap-resolve-references-for-array-type (type wsdl)
   "Resolve references for an array TYPE using WSDL.
 See also `soap-resolve-references-for-element' and
@@ -703,8 +752,12 @@ See also `soap-resolve-references-for-element' and
 (progn
   (put (aref (make-soap-simple-type) 0) 'soap-resolve-references
        'soap-resolve-references-for-simple-type)
+  (put (aref (make-soap-xsd-element) 0) 'soap-resolve-references
+       'soap-resolve-references-for-xsd-element-type)
   (put (aref (make-soap-sequence-type) 0) 'soap-resolve-references
        'soap-resolve-references-for-sequence-type)
+  (put (aref (make-soap-choice-type) 0) 'soap-resolve-references
+       'soap-resolve-references-for-choice-type)
   (put (aref (make-soap-array-type) 0) 'soap-resolve-references
        'soap-resolve-references-for-array-type)
   (put (aref (make-soap-message) 0) 'soap-resolve-references
@@ -952,16 +1005,19 @@ Return a SOAP-NAMESPACE containing the elements."
           "soap-parse-schema-element: expecting xsd:element node, got %s"
           (soap-l2wk (xml-node-name node)))
   (let ((name (xml-get-attribute-or-nil node 'name))
-        type)
-    ;; A schema element that contains an inline complex type --
-    ;; construct the actual complex type for it.
-    (let ((type-node (soap-xml-get-children1 node 'xsd:complexType)))
-      (when (> (length type-node) 0)
-        (assert (= (length type-node) 1)) ; only one complex type
-                                          ; definition per element
-        (setq type (soap-parse-complex-type (car type-node)))))
-    (setf (soap-element-name type) name)
-    type))
+        (type (xml-get-attribute-or-nil node 'type)))
+    (if type
+        (make-soap-xsd-element :name name :type type)
+        (progn
+          ;; Maybe its a schema element that contains an inline complex type --
+          ;; construct the actual complex type for it.
+          (let ((type-node (soap-xml-get-children1 node 'xsd:complexType)))
+            (when (> (length type-node) 0)
+              (assert (= (length type-node) 1)) ; only one complex type
+                                        ; definition per element
+              (let ((type (soap-parse-complex-type (car type-node))))
+                (setf (soap-element-name type) name)
+                type)))))))
 
 (defun soap-parse-complex-type (node)
   "Parse NODE and construct a complex type from it."
@@ -984,12 +1040,16 @@ Return a SOAP-NAMESPACE containing the elements."
             ((or (eq node-name 'xsd:sequence)
                  (eq node-name 'xsd:all))
              (setq type (soap-parse-complex-type-sequence c)))
+            ((eq node-name 'xsd:choice)
+             (setq type (soap-parse-complex-type-choice c)))
             ((eq node-name 'xsd:complexContent)
              (setq type (soap-parse-complex-type-complex-content c)))
             ((eq node-name 'xsd:attribute)
              ;; The name of this node comes from an attribute tag
              (let ((n (xml-get-attribute-or-nil c 'name)))
                (setq name n)))
+            ((eq node-name 'xsd:annotation)
+             t)                         ; skip this node silently
             (t
              (error "Unknown node type %s" node-name))))))
     (setf (soap-element-name type) name)
@@ -1002,14 +1062,15 @@ of its children is assumed to be a sequence element.  Each
 sequence element is parsed constructing the corresponding type.
 A list of these types is returned."
   (assert (let ((n (soap-l2wk (xml-node-name node))))
-            (memq n '(xsd:sequence xsd:all)))
+            (memq n '(xsd:sequence xsd:all xsd:choice)))
           nil
-          "soap-parse-sequence: expecting xsd:sequence or xsd:all node, got %s"
+          "soap-parse-sequence: expecting xsd:sequence, xsd:all or xsd:choice node, got %s"
           (soap-l2wk (xml-node-name node)))
   (let (elements)
     (dolist (e (soap-xml-get-children1 node 'xsd:element))
       (let ((name (xml-get-attribute-or-nil e 'name))
             (type (xml-get-attribute-or-nil e 'type))
+            (ref (xml-get-attribute-or-nil e 'ref))
             (nillable? (or (equal (xml-get-attribute-or-nil e 'nillable) "true")
                            (let ((e (xml-get-attribute-or-nil e 'minOccurs)))
                              (and e (equal e "0")))))
@@ -1028,16 +1089,28 @@ A list of these types is returned."
                 (setq type (soap-parse-complex-type (car type-node))))))
 
         (push (make-soap-sequence-element
-               :name (intern name) :type type :nillable? nillable?
+               :name (and name (intern name)) 
+               :type (or type ref)
+               :nillable? nillable?
                :multiple? multiple?)
               elements)))
     (nreverse elements)))
 
 (defun soap-parse-complex-type-sequence (node)
-  "Parse NODE as a sequence type."
+  "Parse NODE as a choice type."
   (let ((elements (soap-parse-sequence node)))
     (make-soap-sequence-type :elements elements)))
 
+(defun soap-parse-complex-type-choice (node)
+  "Parse NODE as a sequence type."
+  (let ((elements (soap-parse-sequence node))
+        (nillable? (let ((e (xml-get-attribute-or-nil node 'minOccurs)))
+                     (and e (equal e "0"))))
+        (multiple? (let ((e (xml-get-attribute-or-nil node 'maxOccurs)))
+                     (and e (not (equal e "1"))))))
+    (make-soap-choice-type 
+     :nillable? nillable? :multiple? multiple? :choices elements)))
+        
 (defun soap-parse-complex-type-complex-content (node)
   "Parse NODE as a xsd:complexContent node.
 A sequence or an array type is returned depending on the actual
@@ -1053,9 +1126,8 @@ contents."
       ;; a complex content node is either an extension or a restriction
       (cond (extension
              (setq parent (xml-get-attribute-or-nil extension 'base))
-             (setq elements (soap-parse-sequence
-                             (car (soap-xml-get-children1
-                                   extension 'xsd:sequence)))))
+             (setq elements (let ((s (car (soap-xml-get-children1 extension 'xsd:sequence))))
+                              (and s (soap-parse-sequence s)))))
             (restriction
              (let ((base (xml-get-attribute-or-nil restriction 'base)))
                (assert (equal base (soap-wk2l "soapenc:Array"))
