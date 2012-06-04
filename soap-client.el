@@ -1,5 +1,4 @@
 ;;;; soap-client.el -- Access SOAP web services from Emacs
-
 ;; Copyright (C) 2009-2011  Free Software Foundation, Inc.
 
 ;; Author: Alexandru Harsanyi <AlexHarsanyi@gmail.com>
@@ -361,27 +360,355 @@ binding) but the same name."
            nil))))
 
 
+;;;; XML Schema
+
+;; SOAP WSDL documents use XML Schema to define the types that are part of the
+;; message exchange.  We include here an XML schema model with a parser and
+;; serializer/deserialiser.
+
+(defstruct (soap-xs-type (:include soap-element))
+  id)
+
+
+(defstruct (soap-xs-basic-type (:include soap-xs-type))
+  ;; Basic types are "built in" and we know how to handle them directly.
+  ;; Other type definitions reference basic types, so we need to create them
+  ;; in a namespace (see `soap-make-xs-basic-types')
+
+  kind                              ; a symbol of: string, dateTime, long, int, etc
+  )
+
+(defun soap-make-xs-basic-types (namespace-name &optional namespace-tag)
+  "Return a namespace containing some of the XMLSchema basic types."
+  (let ((ns (make-soap-namespace :name namespace-name)))
+    (dolist (type '("string" "dateTime" "boolean"
+                    "long" "int" "integer" "unsignedInt" "byte" "float" "double"
+                    "base64Binary" "anyType" "anyURI" "Array" "byte[]"))
+      (soap-namespace-put
+       (make-soap-xs-basic-type :name type 
+                                :namespace-tag namespace-tag
+                                :kind (intern type))
+       ns))
+    ns))
+
+(defun soap-encode-xs-basic-type (xml-tag value type)
+  "Encode inside XML-TAG the LISP VALUE according to TYPE.
+Do not call this function directly, use `soap-encode-value'
+instead."
+
+  (let ((xsi-type (soap-element-fq-name type))
+        (basic-type (soap-xs-basic-type-kind type)))
+
+    ;; try to classify the type based on the value type and use that type when
+    ;; encoding
+    (when (eq basic-type 'anyType)
+      (cond ((stringp value)
+             (setq xsi-type "xsd:string" basic-type 'string))
+            ((integerp value)
+             (setq xsi-type "xsd:int" basic-type 'int))
+            ((memq value '(t nil))
+             (setq xsi-type "xsd:boolean" basic-type 'boolean))
+            (t
+             (error
+              "Soap-encode-basic-type(%s, %s, %s): cannot classify anyType value"
+              xml-tag value xsi-type))))
+
+    (insert "<" xml-tag " xsi:type=\"" xsi-type "\"")
+
+    ;; We have some ambiguity here, as a nil value represents "false" when the
+    ;; type is boolean, we will never have a "nil" boolean type...
+
+    (if (or value (eq basic-type 'boolean))
+        (progn
+          (insert ">")
+          (case basic-type
+            ((string anyURI)
+             (unless (stringp value)
+               (error "Soap-encode-basic-type(%s, %s, %s): not a string value"
+                      xml-tag value xsi-type))
+             (insert (url-insert-entities-in-string value)))
+
+            (dateTime
+             (cond ((and (consp value) ; is there a time-value-p ?
+                         (>= (length value) 2)
+                         (numberp (nth 0 value))
+                         (numberp (nth 1 value)))
+                    ;; Value is a (current-time) style value, convert
+                    ;; to a string
+                    (insert (format-time-string "%Y-%m-%dT%H:%M:%S" value)))
+                   ((stringp value)
+                    (insert (url-insert-entities-in-string value)))
+                   (t
+                    (error
+                     "Soap-encode-basic-type(%s, %s, %s): not a dateTime value"
+                     xml-tag value xsi-type))))
+
+            (boolean
+             (unless (memq value '(t nil))
+               (error "Soap-encode-basic-type(%s, %s, %s): not a boolean value"
+                      xml-tag value xsi-type))
+             (insert (if value "true" "false")))
+
+            ((long int integer byte unsignedInt)
+             (unless (integerp value)
+               (error "Soap-encode-basic-type(%s, %s, %s): not an integer value"
+                      xml-tag value xsi-type))
+             (when (and (eq basic-type 'unsignedInt) (< value 0))
+               (error "Soap-encode-basic-type(%s, %s, %s): not a positive integer"
+                      xml-tag value xsi-type))
+             (insert (number-to-string value)))
+
+            ((float double)
+             (unless (numberp value)
+               (error "Soap-encode-basic-type(%s, %s, %s): not a number"
+                      xml-tag value xsi-type))
+             (insert (number-to-string value)))
+
+            (base64Binary
+             (unless (stringp value)
+               (error "Soap-encode-basic-type(%s, %s, %s): not a string value"
+                      xml-tag value xsi-type))
+             (insert (base64-encode-string value)))
+
+            (otherwise
+             (error
+              "Soap-encode-basic-type(%s, %s, %s): don't know how to encode"
+              xml-tag value xsi-type))))
+
+        (insert " xsi:nil=\"true\">"))
+    (insert "</" xml-tag ">\n")))
+
+(defun soap-decode-xs-basic-type (type node)
+  "Use TYPE, a `soap-xs-basic-type', to decode the contents of NODE.
+A LISP value is returned based on the contents of NODE and the
+type-info stored in TYPE."
+  (let ((contents (xml-node-children node))
+        (type-kind (soap-xs-basic-type-kind type)))
+
+    (if (null contents)
+        nil
+        (ecase type-kind
+          ((string anyURI) (car contents))
+          (dateTime (car contents))     ; TODO: convert to a date time
+          ((long int integer unsignedInt byte float double) (string-to-number (car contents)))
+          (boolean (string= (downcase (car contents)) "true"))
+          (base64Binary (base64-decode-string (car contents)))
+          (anyType (soap-decode-any-type node))
+          (Array (soap-decode-array node))))))
+
+(progn
+  (put (aref (make-soap-xs-basic-type) 0)
+       'soap-decoder 'soap-decode-xs-basic-type)
+  (put (aref (make-soap-xs-basic-type) 0)
+       'soap-encoder 'soap-encode-xs-basic-type))
+
+(defstruct (soap-xs-simple-type (:include soap-xs-type))
+  ;; A simple type is an extension on the basic type to which some
+  ;; restrictions can be added.  For example we can define a simple type based
+  ;; off "string" with the restrictions that only the strings "one", "two" and
+  ;; "three" are valid values (this is an enumeration).
+
+  attributes
+  base              ; can be a single type, or a list of types for union types
+  enumeration       ; nil, or list of permited values for the type
+  pattern           ; nil, or value must match this pattern
+  length-range      ; a cons of (min . max) length, inclusive range.  For
+                    ; exact length, use (l, l).  nil means no range, (nil . l)
+                    ; means no min range, (l . nil) means no max range.
+  integer-range     ; a pair of (min, max) integer values, inclusive range,
+                    ; same meaning as `length-range'
+  )
+
+(defun soap-xs-parse-simple-type (node)
+  (assert (eq (soap-l2wk (xml-node-name node)) 'xsd:simpleType)
+          nil
+          "soap-xs-parse-simple-type: expecting xsd:simpleType node, got %s"
+          (soap-l2wk (xml-node-name node)))
+  
+  ;; NOTE: name can be nil for inline types.  Such types cannot be added to a
+  ;; namespace.
+  (let ((name (xml-get-attribute-or-nil node 'name))
+        (id (xml-get-attribute-or-nil node 'id)))
+
+    (let ((type (make-soap-xs-simple-type :name name :id id)))
+      (catch 'found
+        (dolist (def (xml-node-children node))
+          (cond 
+            ((stringp def)                ; skip text nodes (whitespace)
+             nil)
+            ((eq (soap-l2wk (xml-node-name def)) 'xsd:restriction)
+             (soap-xs-add-restriction def type))
+            ((eq (soap-l2wk (xml-node-name def)) 'xsd:union)
+             (soap-xs-add-union def type)))))
+      type)))
+
+(defun soap-xs-add-restriction (node type)
+  "Add restrictions to a simple type."
+
+  (assert (eq (soap-l2wk (xml-node-name node)) 'xsd:restriction)
+          nil
+          "soap-xs-parse-restriction: expecting xsd:restriction node, got %s"
+          (soap-l2wk (xml-node-name node)))
+
+  (setf (soap-xs-simple-type-base type) (xml-get-attribute node 'base))
+
+  (dolist (r (xml-node-children node))
+    (unless (stringp r)                 ; skip the whitespace
+      (let ((value (xml-get-attribute r 'value)))
+        (case (soap-l2wk (xml-node-name r))
+          ('xsd:enumeration 
+           (push value (soap-xs-simple-type-enumeration type)))
+          ('xsd:pattern 
+           (setf (soap-xs-simple-type-pattern type) value))
+          ('xsd:length 
+           (let ((value (string-to-number value)))
+             (setf (soap-xs-simple-type-length-range type) (cons value value))))
+          ('xsd:minLength
+           (let ((value (string-to-number value)))
+             (setf (soap-xs-simple-type-length-range type)
+                   (if (soap-xs-simple-type-length-range type)
+                       (cons value (cdr (soap-xs-simple-type-length-range type)))
+                       ;; else
+                       (cons value nil)))))
+          ('xsd:maxLength
+           (let ((value (string-to-number value)))
+             (setf (soap-xs-simple-type-length-range type)
+                   (if (soap-xs-simple-type-length-range type)
+                       (cons (car (soap-xs-simple-type-length-range type)) value)
+                       ;; else
+                       (cons nil value)))))
+          ('xsd:minExclusive
+           (let ((value (string-to-number value)))
+             (setf (soap-xs-simple-type-integer-range type)
+                   (if (soap-xs-simple-type-integer-range type)
+                       (cons (1+ value) (cdr (soap-xs-simple-type-integer-range type)))
+                       ;; else
+                       (cons (1+ value) nil)))))
+          ('xsd:maxExclusive
+           (let ((value (string-to-number value)))
+             (setf (soap-xs-simple-type-integer-range type)
+                   (if (soap-xs-simple-type-integer-range type)
+                       (cons (car (soap-xs-simple-type-integer-range type)) (1- value))
+                       ;; else
+                       (cons nil (1- value))))))
+          ('xsd:minInclusive
+           (let ((value (string-to-number value)))
+             (setf (soap-xs-simple-type-integer-range type)
+                   (if (soap-xs-simple-type-integer-range type)
+                       (cons value (cdr (soap-xs-simple-type-integer-range type)))
+                       ;; else
+                       (cons value nil)))))
+          ('xsd:maxInclusive
+           (let ((value (string-to-number value)))
+             (setf (soap-xs-simple-type-integer-range type)
+                   (if (soap-xs-simple-type-integer-range type)
+                       (cons (car (soap-xs-simple-type-integer-range type)) value)
+                       ;; else
+                       (cons nil value))))))))))
+
+(defun soap-xs-add-union (node type)
+  "Add union members to a simple type."
+  (assert (eq (soap-l2wk (xml-node-name node)) 'xsd:union)
+          nil
+          "soap-xs-parse-union: expecting xsd:union node, got %s"
+          (soap-l2wk (xml-node-name node)))
+
+  (setf (soap-xs-simple-type-base type)
+        (split-string
+         (or (xml-get-attribute-or-nil node 'memberTypes) "")))
+
+  ;; Additional simple types can be defined inside the union node.  Add them
+  ;; to the base list.  The "memberTypes" members will have to be resolved by
+  ;; the "resolve-references" method, the inline types will not.
+  (dolist (simple-type (soap-xml-get-children1 node 'xsd:simpleType))
+    (push (soap-xs-parse-simple-type simple-type) 
+          (soap-xs-simple-type-base type))))
+
+(defun soap-validate-xs-simple-type (value type)
+  "Validate VALUE against the restrictions of TYPE."
+
+  (let ((enumeration (soap-xs-simple-type-enumeration type)))
+    (unless (and (> (length enumeration) 1)
+                 (member value enumeration))
+      (error "xs-simple-type(%s, %s): bad value, should be one of %s"
+             value (soap-element-fq-name type) enumeration)))
+
+  ;; TODO validate against the pattern
+
+  (let ((length-range (soap-xs-simple-type-length-range type)))
+    (when length-range
+      (unless (stringp value)
+        (error 
+         "xs-simple-type(%s, %s): bad value, should be a string with length range %s"
+         value (soap-element-fq-name type) length-range))
+      (when (car length-range)
+        (unless (>= (length value) (car length-range))
+          (error 
+         "xs-simple-type(%s, %s): short string, should be at least %s chars"
+         value (soap-element-fq-name type) (car length-range))))
+      (when (cdr length-range)
+        (unless (<= (length value) (cdr length-range))
+          (error 
+         "xs-simple-type(%s, %s): long string, should be at most %s chars"
+         value (soap-element-fq-name type) (cdr length-range))))))
+
+  (let ((integer-range (soap-xs-simple-type-integer-range type)))
+    (when integer-range
+      (unless (numberp value)
+        (error 
+         "xs-simple-type(%s, %s): bad value, should be a number with range %s"
+         value (soap-element-fq-name type) integer-range))
+      (when (car integer-range)
+        (unless (>= value (car integer-range))
+          (error 
+         "xs-simple-type(%s, %s): small value, should be at least %s"
+         xml-tag value (soap-element-fq-name type) (car integer-range))))
+      (when (cdr integer-range)
+        (unless (<= value (cdr ingeter-range))
+          (error 
+         "xs-simple-type(%s, %s): big value, should be at most %s"
+         value (soap-element-fq-name type) (cdr integer-range)))))))
+  
+;;;;; XS Complex Type
+
+(defstruct (soap-xs-complex-type (:include soap-xs-type))
+  attributes)
+
+(defstruct (soap-xs-sequence-type (:include soap-xs-complex-type))
+  parent
+  elements)
+
+(defstruct (soap-xs-choice-type (:include soap-xs-complex-type))
+  elements)
+
+(defstruct (soap-xs-array-type (:include soap-xs-complex-type))
+  type)
+                                  
+(defstruct (soap-xs-element (:include soap-element))
+  id
+  type
+  abstract?
+  nullable?
+  multiple?
+  reference
+  substitution-group)
+
+(defstruct (soap-xs-attribute (:include soap-element))
+  type)
+
+(defstruct (soap-xs-substitution-group (:include soap-element))
+  members)
+
+(defstruct (soap-xs-attribute-groups (:include soap-element))
+  members)
+
+(defstruct (soap-xs-element-groups (:include soap-element))
+  members)
+
+
 ;;;; WSDL documents
 ;;;;; WSDL document elements
 
-(defstruct (soap-basic-type (:include soap-element))
-  kind                              ; a symbol of: string, dateTime, long, int
-  )
-
-(defstruct (soap-simple-type (:include soap-basic-type))
-  enumeration)
-
-(defstruct soap-sequence-element
-  name type nillable? multiple?)
-
-(defstruct (soap-sequence-type (:include soap-element))
-  parent                                ; OPTIONAL WSDL-TYPE name
-  elements                              ; LIST of SOAP-SEQUENCE-ELEMENT
-  )
-
-(defstruct (soap-array-type (:include soap-element))
-  element-type                          ; WSDL-TYPE of the array elements
-  )
 
 (defstruct (soap-message (:include soap-element))
   parts                                 ; ALIST of NAME => WSDL-TYPE name
@@ -414,28 +741,6 @@ binding) but the same name."
   service-url
   binding)
 
-(defun soap-default-xsd-types ()
-  "Return a namespace containing some of the XMLSchema types."
-  (let ((ns (make-soap-namespace :name "http://www.w3.org/2001/XMLSchema")))
-    (dolist (type '("string" "dateTime" "boolean"
-                    "long" "int" "integer" "unsignedInt" "byte" "float" "double"
-                    "base64Binary" "anyType" "anyURI" "Array" "byte[]"))
-      (soap-namespace-put
-       (make-soap-basic-type :name type :kind (intern type))
-       ns))
-    ns))
-
-(defun soap-default-soapenc-types ()
-  "Return a namespace containing some of the SOAPEnc types."
-  (let ((ns (make-soap-namespace
-             :name "http://schemas.xmlsoap.org/soap/encoding/")))
-    (dolist (type '("string" "dateTime" "boolean"
-                    "long" "int" "integer" "unsignedInt" "byte" "float" "double"
-                    "base64Binary" "anyType" "anyURI" "Array" "byte[]"))
-      (soap-namespace-put
-       (make-soap-basic-type :name type :kind (intern type))
-       ns))
-    ns))
 
 (defun soap-type-p (element)
   "Return t if ELEMENT is a SOAP data type (basic or complex)."
@@ -701,12 +1006,6 @@ See also `soap-resolve-references-for-element' and
 
 ;; Install resolvers for our types
 (progn
-  (put (aref (make-soap-simple-type) 0) 'soap-resolve-references
-       'soap-resolve-references-for-simple-type)
-  (put (aref (make-soap-sequence-type) 0) 'soap-resolve-references
-       'soap-resolve-references-for-sequence-type)
-  (put (aref (make-soap-array-type) 0) 'soap-resolve-references
-       'soap-resolve-references-for-array-type)
   (put (aref (make-soap-message) 0) 'soap-resolve-references
        'soap-resolve-references-for-message)
   (put (aref (make-soap-operation) 0) 'soap-resolve-references
@@ -813,12 +1112,12 @@ calls."
       (setf (soap-wsdl-alias-table wsdl) soap-local-xmlns)
 
       ;; Add the XSD types to the wsdl document
-      (let ((ns (soap-default-xsd-types)))
+      (let ((ns (soap-make-xs-basic-types "http://www.w3.org/2001/XMLSchema")))
         (soap-wsdl-add-namespace ns wsdl)
         (soap-wsdl-add-alias "xsd" (soap-namespace-name ns) wsdl))
 
       ;; Add the soapenc types to the wsdl document
-      (let ((ns (soap-default-soapenc-types)))
+      (let ((ns (soap-make-xs-basic-types "http://schemas.xmlsoap.org/soap/encoding/")))
         (soap-wsdl-add-namespace ns wsdl)
         (soap-wsdl-add-alias "soapenc" (soap-namespace-name ns) wsdl))
 
@@ -1281,25 +1580,6 @@ decode function to perform the actual decoding."
               result)))
     (nreverse result)))
 
-(defun soap-decode-basic-type (type node)
-  "Use TYPE to decode the contents of NODE.
-TYPE is a `soap-basic-type' struct, and NODE is an XML document.
-A LISP value is returned based on the contents of NODE and the
-type-info stored in TYPE."
-  (let ((contents (xml-node-children node))
-        (type-kind (soap-basic-type-kind type)))
-
-    (if (null contents)
-        nil
-        (ecase type-kind
-          ((string anyURI) (car contents))
-          (dateTime (car contents))     ; TODO: convert to a date time
-          ((long int integer unsignedInt byte float double) (string-to-number (car contents)))
-          (boolean (string= (downcase (car contents)) "true"))
-          (base64Binary (base64-decode-string (car contents)))
-          (anyType (soap-decode-any-type node))
-          (Array (soap-decode-array node))))))
-
 (defun soap-decode-sequence-type (type node)
   "Use TYPE to decode the contents of NODE.
 TYPE is assumed to be a sequence type and an ALIST with the
@@ -1336,18 +1616,6 @@ This is because it is easier to work with list results in LISP."
       (when (consp node)
         (push (soap-decode-type element-type node) result)))
     (nreverse result)))
-
-(progn
-  (put (aref (make-soap-basic-type) 0)
-       'soap-decoder 'soap-decode-basic-type)
-  ;; just use the basic type decoder for the simple type -- we accept any
-  ;; value and don't do any validation on it.
-  (put (aref (make-soap-simple-type) 0)
-       'soap-decoder 'soap-decode-basic-type)
-  (put (aref (make-soap-sequence-type) 0)
-       'soap-decoder 'soap-decode-sequence-type)
-  (put (aref (make-soap-array-type) 0)
-       'soap-decoder 'soap-decode-array-type))
 
 ;;;; Soap Envelope parsing
 
@@ -1479,106 +1747,6 @@ work."
     (funcall encoder xml-tag value type))
   (add-to-list 'soap-encoded-namespaces (soap-element-namespace-tag type)))
 
-(defun soap-encode-basic-type (xml-tag value type)
-  "Encode inside XML-TAG the LISP VALUE according to TYPE.
-Do not call this function directly, use `soap-encode-value'
-instead."
-  (let ((xsi-type (soap-element-fq-name type))
-        (basic-type (soap-basic-type-kind type)))
-
-    ;; try to classify the type based on the value type and use that type when
-    ;; encoding
-    (when (eq basic-type 'anyType)
-      (cond ((stringp value)
-             (setq xsi-type "xsd:string" basic-type 'string))
-            ((integerp value)
-             (setq xsi-type "xsd:int" basic-type 'int))
-            ((memq value '(t nil))
-             (setq xsi-type "xsd:boolean" basic-type 'boolean))
-            (t
-             (error
-              "Soap-encode-basic-type(%s, %s, %s): cannot classify anyType value"
-              xml-tag value xsi-type))))
-
-    (insert "<" xml-tag " xsi:type=\"" xsi-type "\"")
-
-    ;; We have some ambiguity here, as a nil value represents "false" when the
-    ;; type is boolean, we will never have a "nil" boolean type...
-
-    (if (or value (eq basic-type 'boolean))
-        (progn
-          (insert ">")
-          (case basic-type
-            ((string anyURI)
-             (unless (stringp value)
-               (error "Soap-encode-basic-type(%s, %s, %s): not a string value"
-                      xml-tag value xsi-type))
-             (insert (url-insert-entities-in-string value)))
-
-            (dateTime
-             (cond ((and (consp value) ; is there a time-value-p ?
-                         (>= (length value) 2)
-                         (numberp (nth 0 value))
-                         (numberp (nth 1 value)))
-                    ;; Value is a (current-time) style value, convert
-                    ;; to a string
-                    (insert (format-time-string "%Y-%m-%dT%H:%M:%S" value)))
-                   ((stringp value)
-                    (insert (url-insert-entities-in-string value)))
-                   (t
-                    (error
-                     "Soap-encode-basic-type(%s, %s, %s): not a dateTime value"
-                     xml-tag value xsi-type))))
-
-            (boolean
-             (unless (memq value '(t nil))
-               (error "Soap-encode-basic-type(%s, %s, %s): not a boolean value"
-                      xml-tag value xsi-type))
-             (insert (if value "true" "false")))
-
-            ((long int integer byte unsignedInt)
-             (unless (integerp value)
-               (error "Soap-encode-basic-type(%s, %s, %s): not an integer value"
-                      xml-tag value xsi-type))
-             (when (and (eq basic-type 'unsignedInt) (< value 0))
-               (error "Soap-encode-basic-type(%s, %s, %s): not a positive integer"
-                      xml-tag value xsi-type))
-             (insert (number-to-string value)))
-
-            ((float double)
-             (unless (numberp value)
-               (error "Soap-encode-basic-type(%s, %s, %s): not a number"
-                      xml-tag value xsi-type))
-             (insert (number-to-string value)))
-
-            (base64Binary
-             (unless (stringp value)
-               (error "Soap-encode-basic-type(%s, %s, %s): not a string value"
-                      xml-tag value xsi-type))
-             (insert (base64-encode-string value)))
-
-            (otherwise
-             (error
-              "Soap-encode-basic-type(%s, %s, %s): don't know how to encode"
-              xml-tag value xsi-type))))
-
-        (insert " xsi:nil=\"true\">"))
-    (insert "</" xml-tag ">\n")))
-
-(defun soap-encode-simple-type (xml-tag value type)
-  "Encode inside XML-TAG the LISP VALUE according to TYPE."
-
-  ;; Validate VALUE agains the simple type's enumeration, than just encode it
-  ;; using `soap-encode-basic-type'
-
-  (let ((enumeration (soap-simple-type-enumeration type)))
-    (unless (and (> (length enumeration) 1)
-                 (member value enumeration))
-      (error "soap-encode-simple-type(%s, %s, %s): bad value, should be one of %s"
-             xml-tag value (soap-element-fq-name type) enumeration)))
-
-  (soap-encode-basic-type xml-tag value type))
-
 (defun soap-encode-sequence-type (xml-tag value type)
   "Encode inside XML-TAG the LISP VALUE according to TYPE.
 Do not call this function directly, use `soap-encode-value'
@@ -1635,16 +1803,6 @@ instead."
     (loop for i below (length value)
          do (soap-encode-value xml-tag (aref value i) element-type))
     (insert "</" xml-tag ">\n")))
-
-(progn
-  (put (aref (make-soap-basic-type) 0)
-       'soap-encoder 'soap-encode-basic-type)
-  (put (aref (make-soap-simple-type) 0)
-       'soap-encoder 'soap-encode-simple-type)
-  (put (aref (make-soap-sequence-type) 0)
-       'soap-encoder 'soap-encode-sequence-type)
-  (put (aref (make-soap-array-type) 0)
-       'soap-encoder 'soap-encode-array-type))
 
 (defun soap-encode-body (operation parameters wsdl)
   "Create the body of a SOAP request for OPERATION in the current buffer.
