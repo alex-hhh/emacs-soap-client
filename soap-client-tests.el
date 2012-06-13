@@ -99,7 +99,6 @@
     </xs:union>
   </xs:simpleType>")
 
-
 (ert-deftest soapt-make-simple-type ()
   (dolist (test-case 
             `(([cl-struct-soap-xs-simple-type "st1" nil nil nil "xs:integer" nil nil nil
@@ -135,3 +134,110 @@
                    (let ((r (soapt-parse-xml (cdr test-case))))
                      (soap-with-local-xmlns r
                        (soap-xs-parse-simple-type r)))))))
+
+(defconst *xs-element-def1*
+  "<xs:element xmlns:xs=\"http://www.w3.org/2001/XMLSchema\" name=\"age\">
+  <xs:simpleType>
+    <xs:restriction base=\"xs:integer\">
+      <xs:minInclusive value=\"0\"/>
+      <xs:maxInclusive value=\"120\"/>
+    </xs:restriction>
+  </xs:simpleType>
+</xs:element> ")
+
+(defconst *xs-element-def2*
+  "<xs:element xmlns:xs=\"http://www.w3.org/2001/XMLSchema\" name=\"age\" type=\"ageType\"/>")
+
+(defconst *xs-element-def3*
+  "<xs:element xmlns:xs=\"http://www.w3.org/2001/XMLSchema\" name=\"shoesize\">
+<xs:complexType>
+    <xs:simpleContent>
+      <xs:extension base=\"xs:integer\">
+        <xs:attribute name=\"country\" type=\"xs:string\" />
+      </xs:extension>
+    </xs:simpleContent>
+  </xs:complexType>
+</xs:element>")
+
+(ert-deftest soapt-make-element ()
+  (dolist (test-case
+            `(([cl-struct-soap-xs-element "age" nil nil
+                                          [cl-struct-soap-xs-simple-type nil nil nil nil "xs:integer" nil nil nil
+                                                                         (0 . 120)]
+                                          nil nil nil nil] 
+               . ,*xs-element-def1*)
+              ([cl-struct-soap-xs-element "age" nil nil "ageType" nil nil nil nil]
+               . ,*xs-element-def2*)
+              ([cl-struct-soap-xs-element "shoesize" nil nil
+                           [cl-struct-soap-xs-simple-type nil nil nil
+                                                          ([cl-struct-soap-xs-attribute "country" nil "xs:string" nil])
+                                                          "xs:integer" nil nil nil nil]
+                           nil nil nil nil]
+               . ,*xs-element-def3*)))
+    (should (equal (car test-case)
+                   (let ((r (soapt-parse-xml (cdr test-case))))
+                     (soap-with-local-xmlns r
+                       (soap-xs-parse-element r)))))))
+    
+(defconst *xs-complex-type1*
+  "<xs:complexType xmlns:xs=\"http://www.w3.org/2001/XMLSchema\" name=\"shoesize\">
+    <xs:simpleContent>
+      <xs:extension base=\"xs:integer\">
+        <xs:attribute name=\"country\" type=\"xs:string\" />
+      </xs:extension>
+    </xs:simpleContent>
+  </xs:complexType>")
+
+(defconst *xs-complex-type2*
+  "<xs:complexType xmlns:xs=\"http://www.w3.org/2001/XMLSchema\" >
+    <xs:sequence>
+      <xs:element name=\"firstname\" type=\"xs:string\"/>
+      <xs:element name=\"lastname\" type=\"xs:string\"/>
+    </xs:sequence>
+  </xs:complexType>
+</xs:element>")
+
+(defconst *xs-complex-type3*
+  "<xs:complexType xmlns:xs=\"http://www.w3.org/2001/XMLSchema\" name=\"fullpersoninfo\">
+  <xs:complexContent>
+    <xs:extension base=\"personinfo\">
+      <xs:sequence>
+        <xs:element name=\"address\" type=\"xs:string\"/>
+        <xs:element name=\"city\" type=\"xs:string\"/>
+        <xs:element name=\"country\" type=\"xs:string\"/>
+      </xs:sequence>
+    </xs:extension>
+  </xs:complexContent>
+</xs:complexType>")
+
+(defconst *xs-complex-type4*
+  "<xs:complexType xmlns:xs=\"http://www.w3.org/2001/XMLSchema\" name=\"ArrayOf_tns1_RemoteUser\">
+    <xs:complexContent>
+     <xs:restriction base=\"soapenc:Array\">
+      <xs:attribute ref=\"soapenc:arrayType\" wsdl:arrayType=\"tns1:RemoteUser[]\"/>
+     </xs:restriction>
+    </xs:complexContent>
+   </xs:complexType>")
+
+(ert-deftest soapt-make-complex-type ()
+  (dolist (test-case
+            `(([cl-struct-soap-xs-simple-type "shoesize" nil nil
+                               ([cl-struct-soap-xs-attribute "country" nil "xs:string" nil])
+                               "xs:integer" nil nil nil nil]
+               . ,*xs-complex-type1*)
+              ([cl-struct-soap-xs-complex-type nil nil nil nil sequence nil
+                                ([cl-struct-soap-xs-element "lastname" nil nil "xs:string" nil nil nil nil]
+                                 [cl-struct-soap-xs-element "firstname" nil nil "xs:string" nil nil nil nil])]
+               . ,*xs-complex-type2*)
+              ([cl-struct-soap-xs-complex-type "fullpersoninfo" nil nil nil sequence "personinfo"
+                                ([cl-struct-soap-xs-element "country" nil nil "xs:string" nil nil nil nil]
+                                 [cl-struct-soap-xs-element "city" nil nil "xs:string" nil nil nil nil]
+                                 [cl-struct-soap-xs-element "address" nil nil "xs:string" nil nil nil nil])]
+               . ,*xs-complex-type3*)))
+    (should (equal (car test-case)
+                   (let ((r (soapt-parse-xml (cdr test-case))))
+                     (soap-with-local-xmlns r
+                       (soap-xs-parse-complex-type r)))))))
+
+
+

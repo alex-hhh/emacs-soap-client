@@ -254,6 +254,13 @@ namespace tag."
         (push c result)))
     (nreverse result)))
 
+(defun soap-xml-node-first-child (node)
+  "Return the first non-text child of NODE."
+  (catch 'found
+    (dolist (child (xml-node-children node))
+      (when (consp child)
+        (throw 'found child)))))
+
 (defun soap-xml-get-attribute-or-nil1 (node attribute)
   "Return the NODE's ATTRIBUTE, or nil if it does not exist.
 This is the same as `xml-get-attribute-or-nil', but ATTRIBUTE can
@@ -367,8 +374,8 @@ binding) but the same name."
 ;; serializer/deserialiser.
 
 (defstruct (soap-xs-type (:include soap-element))
-  id)
-
+  id
+  attributes)
 
 (defstruct (soap-xs-basic-type (:include soap-xs-type))
   ;; Basic types are "built in" and we know how to handle them directly.
@@ -502,13 +509,75 @@ type-info stored in TYPE."
   (put (aref (make-soap-xs-basic-type) 0)
        'soap-encoder 'soap-encode-xs-basic-type))
 
+(defstruct (soap-xs-element (:include soap-element))
+  ;; NOTE: we don't suport exact number of occurences via minOccurs,
+  ;; maxOccurs.  Instead we support optional? and multiple?
+
+  id
+  type
+  optional?
+  multiple?
+  reference
+  substitution-group)
+
+(defun soap-xs-parse-element (node)
+  "Construct a `soap-xs-element' from NODE."
+  (assert (eq (soap-l2wk (xml-node-name node)) 'xsd:element)
+          "soap-xs-parse-element: expecting xsd:element, got %s"
+          (soap-l2wk (xml-node-name node)))
+  (let ((name (xml-get-attribute-or-nil node 'name))
+        (id (xml-get-attribute-or-nil node 'id))
+        (type (xml-get-attribute-or-nil node 'type))
+        (optional? (or (equal (xml-get-attribute-or-nil node 'nillable) "true")
+                       (let ((e (xml-get-attribute-or-nil node 'minOccurs)))
+                         (and e (equal e "0")))))
+        (multiple? (let ((e (xml-get-attribute-or-nil node 'maxOccurs)))
+                     (and e (not (equal e "1")))))
+        (ref (xml-get-attribute-or-nil node 'ref))
+        (substitution-group (xml-get-attribute-or-nil node 'substitutionGroup)))
+
+    (unless (or ref type)
+      ;; no type specified and this is not a reference.  Must be a type
+      ;; defined within this node.
+      (let ((simple-type (soap-xml-get-children1 node 'xsd:simpleType)))
+        (if simple-type
+            (setq type (soap-xs-parse-simple-type (car simple-type)))
+            ;; else
+            
+            (let ((complex-type (soap-xml-get-children1 node 'xsd:complexType)))
+              (if complex-type
+                  (setq type (soap-xs-parse-complex-type (car complex-type)))
+                  ;; else
+                  (error "soap-xs-parse-element: node has no type and is not a ref"))))))
+
+    (make-soap-xs-element :name name :id id :type type 
+                          :optional? optional? :multiple? multiple?
+                          :reference ref :substitution-group substitution-group)))
+
+(defstruct (soap-xs-attribute (:include soap-element))
+  type                                  ; a simple type or basic type
+  reference)
+
+(defun soap-xs-parse-attribute (node)
+  "Construct a `soap-xs-attribute' from NODE."
+  (assert (eq (soap-l2wk (xml-node-name node)) 'xsd:attribute)
+          "soap-xs-parse-attribute: expecting xsd:attribute, got %s"
+          (soap-l2wk (xml-node-name node)))
+  (let ((name (xml-get-attribute-or-nil node 'name))
+        (type (xml-get-attribute-or-nil node 'type))
+        (ref (xml-get-attribute-or-nil node 'ref)))
+    (unless (or type ref)
+      (setq type (soap-xs-parse-simple-type 
+                  (soap-xml-node-first-child node))))
+    (make-soap-xs-attribute :name name :type type :reference ref)))
+           
+
 (defstruct (soap-xs-simple-type (:include soap-xs-type))
   ;; A simple type is an extension on the basic type to which some
   ;; restrictions can be added.  For example we can define a simple type based
   ;; off "string" with the restrictions that only the strings "one", "two" and
   ;; "three" are valid values (this is an enumeration).
 
-  attributes
   base              ; can be a single type, or a list of types for union types
   enumeration       ; nil, or list of permited values for the type
   pattern           ; nil, or value must match this pattern
@@ -520,9 +589,9 @@ type-info stored in TYPE."
   )
 
 (defun soap-xs-parse-simple-type (node)
-  (assert (eq (soap-l2wk (xml-node-name node)) 'xsd:simpleType)
+  (assert (memq (soap-l2wk (xml-node-name node)) '(xsd:simpleType xsd:simpleContent))
           nil
-          "soap-xs-parse-simple-type: expecting xsd:simpleType node, got %s"
+          "soap-xs-parse-simple-type: expecting xsd:simpleType or xsd:simpleContent node, got %s"
           (soap-l2wk (xml-node-name node)))
   
   ;; NOTE: name can be nil for inline types.  Such types cannot be added to a
@@ -530,16 +599,12 @@ type-info stored in TYPE."
   (let ((name (xml-get-attribute-or-nil node 'name))
         (id (xml-get-attribute-or-nil node 'id)))
 
-    (let ((type (make-soap-xs-simple-type :name name :id id)))
-      (catch 'found
-        (dolist (def (xml-node-children node))
-          (cond 
-            ((stringp def)                ; skip text nodes (whitespace)
-             nil)
-            ((eq (soap-l2wk (xml-node-name def)) 'xsd:restriction)
-             (soap-xs-add-restriction def type))
-            ((eq (soap-l2wk (xml-node-name def)) 'xsd:union)
-             (soap-xs-add-union def type)))))
+    (let ((type (make-soap-xs-simple-type :name name :id id))
+          (def (soap-xml-node-first-child node)))
+      (ecase (soap-l2wk (xml-node-name def))
+        (xsd:restriction (soap-xs-add-restriction def type))
+        (xsd:extension (soap-xs-add-extension def type))
+        (xsd:union (soap-xs-add-union def type)))
       type)))
 
 (defun soap-xs-add-restriction (node type)
@@ -556,49 +621,49 @@ type-info stored in TYPE."
     (unless (stringp r)                 ; skip the whitespace
       (let ((value (xml-get-attribute r 'value)))
         (case (soap-l2wk (xml-node-name r))
-          ('xsd:enumeration 
+          (xsd:enumeration 
            (push value (soap-xs-simple-type-enumeration type)))
-          ('xsd:pattern 
+          (xsd:pattern 
            (setf (soap-xs-simple-type-pattern type) value))
-          ('xsd:length 
+          (xsd:length 
            (let ((value (string-to-number value)))
              (setf (soap-xs-simple-type-length-range type) (cons value value))))
-          ('xsd:minLength
+          (xsd:minLength
            (let ((value (string-to-number value)))
              (setf (soap-xs-simple-type-length-range type)
                    (if (soap-xs-simple-type-length-range type)
                        (cons value (cdr (soap-xs-simple-type-length-range type)))
                        ;; else
                        (cons value nil)))))
-          ('xsd:maxLength
+          (xsd:maxLength
            (let ((value (string-to-number value)))
              (setf (soap-xs-simple-type-length-range type)
                    (if (soap-xs-simple-type-length-range type)
                        (cons (car (soap-xs-simple-type-length-range type)) value)
                        ;; else
                        (cons nil value)))))
-          ('xsd:minExclusive
+          (xsd:minExclusive
            (let ((value (string-to-number value)))
              (setf (soap-xs-simple-type-integer-range type)
                    (if (soap-xs-simple-type-integer-range type)
                        (cons (1+ value) (cdr (soap-xs-simple-type-integer-range type)))
                        ;; else
                        (cons (1+ value) nil)))))
-          ('xsd:maxExclusive
+          (xsd:maxExclusive
            (let ((value (string-to-number value)))
              (setf (soap-xs-simple-type-integer-range type)
                    (if (soap-xs-simple-type-integer-range type)
                        (cons (car (soap-xs-simple-type-integer-range type)) (1- value))
                        ;; else
                        (cons nil (1- value))))))
-          ('xsd:minInclusive
+          (xsd:minInclusive
            (let ((value (string-to-number value)))
              (setf (soap-xs-simple-type-integer-range type)
                    (if (soap-xs-simple-type-integer-range type)
                        (cons value (cdr (soap-xs-simple-type-integer-range type)))
                        ;; else
                        (cons value nil)))))
-          ('xsd:maxInclusive
+          (xsd:maxInclusive
            (let ((value (string-to-number value)))
              (setf (soap-xs-simple-type-integer-range type)
                    (if (soap-xs-simple-type-integer-range type)
@@ -616,6 +681,12 @@ type-info stored in TYPE."
   (setf (soap-xs-simple-type-base type)
         (split-string
          (or (xml-get-attribute-or-nil node 'memberTypes) "")))
+
+(defun soap-xs-add-extension (node type)
+  (setf (soap-xs-simple-type-base type) (xml-get-attribute node 'base))
+  (dolist (attribute (soap-xml-get-children1 node 'xsd:attribute))
+    (push (soap-xs-parse-attribute attribute) 
+          (soap-xs-type-attributes type))))
 
   ;; Additional simple types can be defined inside the union node.  Add them
   ;; to the base list.  The "memberTypes" members will have to be resolved by
@@ -669,42 +740,94 @@ type-info stored in TYPE."
          "xs-simple-type(%s, %s): big value, should be at most %s"
          value (soap-element-fq-name type) (cdr integer-range)))))))
   
-;;;;; XS Complex Type
-
 (defstruct (soap-xs-complex-type (:include soap-xs-type))
-  attributes)
-
-(defstruct (soap-xs-sequence-type (:include soap-xs-complex-type))
-  parent
+  indicator                             ; sequence, choice, all, array
+  base
   elements)
 
-(defstruct (soap-xs-choice-type (:include soap-xs-complex-type))
-  elements)
+(defun soap-xs-parse-complex-type (node)
+  (assert (memq (soap-l2wk (xml-node-name node)) 
+                '(xsd:complexType xsd:complexContent))
+          nil
+          "soap-xs-parse-complex-type: unexpected node, %s"
+          (soap-l2wk (xml-node-name node)))
 
-(defstruct (soap-xs-array-type (:include soap-xs-complex-type))
-  type)
-                                  
-(defstruct (soap-xs-element (:include soap-element))
-  id
-  type
-  abstract?
-  nullable?
-  multiple?
-  reference
-  substitution-group)
+  (let ((name (xml-get-attribute-or-nil node 'name))
+        (id (xml-get-attribute-or-nil node 'id))
+        type
+        attributes)
+    (dolist (def (xml-node-children node))
+      (when (consp def)                 ; skip text nodes
+        (case (soap-l2wk (xml-node-name def))
+          (xsd:attribute (push (soap-xs-parse-attribute def) attributes))
+          (xsd:simpleContent (setq type (soap-xs-parse-simple-type def)))
+          (xsd:sequence (setq type (soap-xs-parse-sequence def)))
+          (xsd:complexContent
+           (dolist (def (xml-node-children def))
+             (when (consp def)
+               (case (soap-l2wk (xml-node-name def))
+                 (xsd:attribute 
+                  (push (soap-xs-parse-attribute def) attributes))
+                 ((xsd:extension xsd:restriction) 
+                  (setq type (soap-xs-parse-extension-or-restriction def)))
+                 ((xsd:sequence xsd:all xsd:choice) 
+                  (soap-xs-parse-sequence def)))))))))
+    (unless type
+      ;; the type has not been built, this is a shortcut for a simpleContent node
+      (setq type (make-soap-xs-simple-type)))
 
-(defstruct (soap-xs-attribute (:include soap-element))
-  type)
+    (setf (soap-xs-type-name type) name)
+    (setf (soap-xs-type-id type) id)
+    (setf (soap-xs-type-attributes type) 
+          (append attributes (soap-xs-type-attributes type)))
+  
+    type))
 
-(defstruct (soap-xs-substitution-group (:include soap-element))
-  members)
+(defun soap-xs-parse-sequence (node)
 
-(defstruct (soap-xs-attribute-groups (:include soap-element))
-  members)
+  (assert (memq (soap-l2wk (xml-node-name node)) 
+                '(xsd:sequence xsd:choice xsd:all))
+          nil
+          "soap-xs-parse-sequence: unexpected node, %s"
+          (soap-l2wk (xml-node-name node)))
 
-(defstruct (soap-xs-element-groups (:include soap-element))
-  members)
+  (let ((type (make-soap-xs-complex-type)))
 
+    (setf (soap-xs-complex-type-indicator type)
+          (ecase (soap-l2wk (xml-node-name node))
+            (xsd:sequence 'sequence)
+            (xsd:all 'all)
+            (xsd:choice 'choice)))
+
+    (dolist (element (soap-xml-get-children1 node 'xsd:element))
+      (push (soap-xs-parse-element element) 
+            (soap-xs-complex-type-elements type)))
+
+    (dolist (attribute (soap-xml-get-children1 node 'xsd:attribute))
+      (push (soap-xs-parse-attribute attribute)
+            (soap-xs-type-attributes type)))
+    
+    type))
+
+(defun soap-xs-parse-extension-or-restriction (node)
+  (assert (memq (soap-l2wk (xml-node-name node)) 
+                '(xsd:extension xsd:restriction))
+          nil
+          "soap-xs-parse-extension: unexpected node, %s"
+          (soap-l2wk (xml-node-name node)))
+  (let (type attributes)
+    (dolist (def (xml-node-children node))
+      (when (consp def)                 ; skip text nodes
+        (case (soap-l2wk (xml-node-name def))
+          ((xsd:sequence xsd:choice xsd:all) 
+           (setq type (soap-xs-parse-sequence def)))
+          (xsd:attribute
+           (push (soap-xs-parse-attribute def) attributes)))))
+    (unless type
+      (setq type (make-soap-xs-complex-type)))
+    (setf (soap-xs-complex-type-base type)
+          (xml-get-attribute-or-nil node 'base))
+    type))
 
 ;;;; WSDL documents
 ;;;;; WSDL document elements
