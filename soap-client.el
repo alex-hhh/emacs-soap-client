@@ -601,7 +601,7 @@ type-info stored in TYPE."
 
     (let ((type (make-soap-xs-simple-type :name name :id id))
           (def (soap-xml-node-first-child node)))
-      (ecase (soap-l2wk (xml-node-name def))
+      (case (soap-l2wk (xml-node-name def))
         (xsd:restriction (soap-xs-add-restriction def type))
         (xsd:extension (soap-xs-add-extension def type))
         (xsd:union (soap-xs-add-union def type)))
@@ -815,19 +815,64 @@ type-info stored in TYPE."
           nil
           "soap-xs-parse-extension: unexpected node, %s"
           (soap-l2wk (xml-node-name node)))
-  (let (type attributes)
+  (let (type 
+        attributes
+        array?
+        (base (xml-get-attribute-or-nil node 'base)))
+
+    ;; Array declarations are recognized specially, it is unclear to me how
+    ;; they could be treated generally...
+    (setq array?
+          (and (eq (soap-l2wk (xml-node-name node)) 'xsd:restriction)
+               (equal base (soap-wk2l "soapenc:Array"))))
+
     (dolist (def (xml-node-children node))
       (when (consp def)                 ; skip text nodes
         (case (soap-l2wk (xml-node-name def))
           ((xsd:sequence xsd:choice xsd:all) 
            (setq type (soap-xs-parse-sequence def)))
           (xsd:attribute
-           (push (soap-xs-parse-attribute def) attributes)))))
+           (if array?
+               (progn
+                 (let ((array-type (soap-xml-get-attribute-or-nil1 def 'wsdl:arrayType)))
+                   (when (and array-type (string-match "^\\(.*\\)\\[\\]$" array-type))
+                     ;; Override
+                     (setq base (match-string 1 array-type)))))
+               ;; else
+               (push (soap-xs-parse-attribute def) attributes))))))
+
     (unless type
-      (setq type (make-soap-xs-complex-type)))
-    (setf (soap-xs-complex-type-base type)
-          (xml-get-attribute-or-nil node 'base))
+      (setq type (make-soap-xs-complex-type))
+      (when array?
+        (setf (soap-xs-complex-type-indicator type) 'array)))
+
+    (setf (soap-xs-complex-type-base type) base)
     type))
+
+(defun soap-parse-schema (node)
+  "Parse a schema NODE.
+Return a SOAP-NAMESPACE containing the elements."
+  (soap-with-local-xmlns node
+    (assert (eq (soap-l2wk (xml-node-name node)) 'xsd:schema)
+            nil
+            "soap-parse-schema: expecting an xsd:schema node, got %s"
+            (soap-l2wk (xml-node-name node)))
+
+    (let ((ns (make-soap-namespace :name (soap-get-target-namespace node))))
+
+      (dolist (def (xml-node-children node))
+        (unless (stringp def)           ; skip text nodes
+          (case (soap-l2wk (xml-node-name def))
+            (xsd:element 
+             (soap-namespace-put (soap-xs-parse-element def) ns))
+            (xsd:attribute
+             (soap-namespace-put (soap-xs-parse-attribute def) ns))
+            (xsd:simpleType
+             (soap-namespace-put (soap-xs-parse-simple-type def) ns))
+            (xsd:complesType
+             (soap-namespace-put (soap-xs-parse-complex-type def) ns)))))
+      ns)))
+
 
 ;;;; WSDL documents
 ;;;;; WSDL document elements
@@ -1289,182 +1334,6 @@ calls."
 
       wsdl)))
 
-(defun soap-parse-schema (node)
-  "Parse a schema NODE.
-Return a SOAP-NAMESPACE containing the elements."
-  (soap-with-local-xmlns node
-    (assert (eq (soap-l2wk (xml-node-name node)) 'xsd:schema)
-            nil
-            "soap-parse-schema: expecting an xsd:schema node, got %s"
-            (soap-l2wk (xml-node-name node)))
-    (let ((ns (make-soap-namespace :name (soap-get-target-namespace node))))
-      ;; NOTE: we only extract the complexTypes from the schema, we wouldn't
-      ;; know how to handle basic types beyond the built in ones anyway.
-      (dolist (node (soap-xml-get-children1 node 'xsd:simpleType))
-        (soap-namespace-put (soap-parse-simple-type node) ns))
-
-      (dolist (node (soap-xml-get-children1 node 'xsd:complexType))
-        (soap-namespace-put (soap-parse-complex-type node) ns))
-
-      (dolist (node (soap-xml-get-children1 node 'xsd:element))
-        (soap-namespace-put (soap-parse-schema-element node) ns))
-
-      ns)))
-
-(defun soap-parse-simple-type (node)
-  "Parse NODE and construct a simple type from it."
-  (assert (eq (soap-l2wk (xml-node-name node)) 'xsd:simpleType)
-          nil
-          "soap-parse-complex-type: expecting xsd:simpleType node, got %s"
-          (soap-l2wk (xml-node-name node)))
-  (let ((name (xml-get-attribute-or-nil node 'name))
-        type
-        enumeration
-        (restriction (car-safe
-                      (soap-xml-get-children1 node 'xsd:restriction))))
-    (unless restriction
-      (error "simpleType %s has no base type" name))
-
-    (setq type (xml-get-attribute-or-nil restriction 'base))
-    (dolist (e (soap-xml-get-children1 restriction 'xsd:enumeration))
-      (push (xml-get-attribute e 'value) enumeration))
-
-    (make-soap-simple-type :name name :kind type :enumeration enumeration)))
-
-(defun soap-parse-schema-element (node)
-  "Parse NODE and construct a schema element from it."
-  (assert (eq (soap-l2wk (xml-node-name node)) 'xsd:element)
-          nil
-          "soap-parse-schema-element: expecting xsd:element node, got %s"
-          (soap-l2wk (xml-node-name node)))
-  (let ((name (xml-get-attribute-or-nil node 'name))
-        type)
-    ;; A schema element that contains an inline complex type --
-    ;; construct the actual complex type for it.
-    (let ((type-node (soap-xml-get-children1 node 'xsd:complexType)))
-      (when (> (length type-node) 0)
-        (assert (= (length type-node) 1)) ; only one complex type
-                                          ; definition per element
-        (setq type (soap-parse-complex-type (car type-node)))))
-    (setf (soap-element-name type) name)
-    type))
-
-(defun soap-parse-complex-type (node)
-  "Parse NODE and construct a complex type from it."
-  (assert (eq (soap-l2wk (xml-node-name node)) 'xsd:complexType)
-          nil
-          "soap-parse-complex-type: expecting xsd:complexType node, got %s"
-          (soap-l2wk (xml-node-name node)))
-  (let ((name (xml-get-attribute-or-nil node 'name))
-        ;; Use a dummy type for the complex type, it will be replaced
-        ;; with the real type below, except when the complex type node
-        ;; is empty...
-        (type (make-soap-sequence-type :elements nil)))
-    (dolist (c (xml-node-children node))
-      (when (consp c)               ; skip string nodes, which are whitespace
-        (let ((node-name (soap-l2wk (xml-node-name c))))
-          (cond
-            ;; The difference between xsd:all and xsd:sequence is that fields
-            ;; in xsd:all are not ordered and they can occur only once.  We
-            ;; don't care about that difference in soap-client.el
-            ((or (eq node-name 'xsd:sequence)
-                 (eq node-name 'xsd:all))
-             (setq type (soap-parse-complex-type-sequence c)))
-            ((eq node-name 'xsd:complexContent)
-             (setq type (soap-parse-complex-type-complex-content c)))
-            ((eq node-name 'xsd:attribute)
-             ;; The name of this node comes from an attribute tag
-             (let ((n (xml-get-attribute-or-nil c 'name)))
-               (setq name n)))
-            (t
-             (error "Unknown node type %s" node-name))))))
-    (setf (soap-element-name type) name)
-    type))
-
-(defun soap-parse-sequence (node)
-  "Parse NODE and a list of sequence elements that it defines.
-NODE is assumed to be an xsd:sequence node.  In that case, each
-of its children is assumed to be a sequence element.  Each
-sequence element is parsed constructing the corresponding type.
-A list of these types is returned."
-  (assert (let ((n (soap-l2wk (xml-node-name node))))
-            (memq n '(xsd:sequence xsd:all)))
-          nil
-          "soap-parse-sequence: expecting xsd:sequence or xsd:all node, got %s"
-          (soap-l2wk (xml-node-name node)))
-  (let (elements)
-    (dolist (e (soap-xml-get-children1 node 'xsd:element))
-      (let ((name (xml-get-attribute-or-nil e 'name))
-            (type (xml-get-attribute-or-nil e 'type))
-            (nillable? (or (equal (xml-get-attribute-or-nil e 'nillable) "true")
-                           (let ((e (xml-get-attribute-or-nil e 'minOccurs)))
-                             (and e (equal e "0")))))
-            (multiple? (let ((e (xml-get-attribute-or-nil e 'maxOccurs)))
-                         (and e (not (equal e "1"))))))
-        (if type
-            (setq type (soap-l2fq type 'tns))
-
-            ;; The node does not have a type, maybe it has a complexType
-            ;; defined inline...
-            (let ((type-node (soap-xml-get-children1 e 'xsd:complexType)))
-              (when (> (length type-node) 0)
-                (assert (= (length type-node) 1)
-                        nil
-                        "only one complex type definition per element supported")
-                (setq type (soap-parse-complex-type (car type-node))))))
-
-        (push (make-soap-sequence-element
-               :name (intern name) :type type :nillable? nillable?
-               :multiple? multiple?)
-              elements)))
-    (nreverse elements)))
-
-(defun soap-parse-complex-type-sequence (node)
-  "Parse NODE as a sequence type."
-  (let ((elements (soap-parse-sequence node)))
-    (make-soap-sequence-type :elements elements)))
-
-(defun soap-parse-complex-type-complex-content (node)
-  "Parse NODE as a xsd:complexContent node.
-A sequence or an array type is returned depending on the actual
-contents."
-  (assert (eq (soap-l2wk (xml-node-name node)) 'xsd:complexContent)
-          nil
-          "soap-parse-complex-type-complex-content: expecting xsd:complexContent node, got %s"
-          (soap-l2wk (xml-node-name node)))
-  (let (array? parent elements)
-    (let ((extension (car-safe (soap-xml-get-children1 node 'xsd:extension)))
-          (restriction (car-safe
-                        (soap-xml-get-children1 node 'xsd:restriction))))
-      ;; a complex content node is either an extension or a restriction
-      (cond (extension
-             (setq parent (xml-get-attribute-or-nil extension 'base))
-             (setq elements (soap-parse-sequence
-                             (car (soap-xml-get-children1
-                                   extension 'xsd:sequence)))))
-            (restriction
-             (let ((base (xml-get-attribute-or-nil restriction 'base)))
-               (assert (equal base (soap-wk2l "soapenc:Array"))
-                       nil
-                       "restrictions supported only for soapenc:Array types, this is a %s"
-                       base))
-             (setq array? t)
-             (let ((attribute (car (soap-xml-get-children1
-                                    restriction 'xsd:attribute))))
-               (let ((array-type (soap-xml-get-attribute-or-nil1
-                                  attribute 'wsdl:arrayType)))
-                 (when (string-match "^\\(.*\\)\\[\\]$" array-type)
-                   (setq parent (match-string 1 array-type))))))
-
-            (t
-             (error "Unknown complex type"))))
-
-    (if parent
-        (setq parent (soap-l2fq parent 'tns)))
-
-    (if array?
-        (make-soap-array-type :element-type parent)
-        (make-soap-sequence-type :parent parent :elements elements))))
 
 (defun soap-parse-message (node)
   "Parse NODE as a wsdl:message and return the corresponding type."
