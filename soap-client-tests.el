@@ -8,6 +8,11 @@
     (insert text)
     (car (xml-parse-region (point-min) (point-max)))))
 
+(defun soapt-parse-xml-from-file (file)
+  (with-temp-buffer
+    (insert-file-contents file)
+    (car (xml-parse-region (point-min) (point-max)))))
+
 (ert-deftest soapt-encode-xs-basic-types ()
   (let ((type (soap-namespace-get "int" *xs*)))
     (let ((expected "<hello xsi:type=\"xs:int\">42</hello>\n")
@@ -211,7 +216,10 @@
 </xs:complexType>")
 
 (defconst *xs-complex-type4*
-  "<xs:complexType xmlns:xs=\"http://www.w3.org/2001/XMLSchema\" name=\"ArrayOf_tns1_RemoteUser\">
+  "<xs:complexType xmlns:xs=\"http://www.w3.org/2001/XMLSchema\" 
+                   xmlns:soapenc=\"http://schemas.xmlsoap.org/soap/encoding/\"
+                   xmlns:wsdl=\"http://schemas.xmlsoap.org/wsdl/\"
+                   name=\"ArrayOf_tns1_RemoteUser\">
     <xs:complexContent>
      <xs:restriction base=\"soapenc:Array\">
       <xs:attribute ref=\"soapenc:arrayType\" wsdl:arrayType=\"tns1:RemoteUser[]\"/>
@@ -233,11 +241,12 @@
                                 ([cl-struct-soap-xs-element "country" nil nil "xs:string" nil nil nil nil]
                                  [cl-struct-soap-xs-element "city" nil nil "xs:string" nil nil nil nil]
                                  [cl-struct-soap-xs-element "address" nil nil "xs:string" nil nil nil nil])]
-               . ,*xs-complex-type3*)))
+               . ,*xs-complex-type3*)
+              ([cl-struct-soap-xs-complex-type "ArrayOf_tns1_RemoteUser" nil nil nil array "tns1:RemoteUser" nil]
+               . ,*xs-complex-type4*)))
     (should (equal (car test-case)
                    (let ((r (soapt-parse-xml (cdr test-case))))
                      (soap-with-local-xmlns r
                        (soap-xs-parse-complex-type r)))))))
-
 
 
