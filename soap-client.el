@@ -554,6 +554,23 @@ type-info stored in TYPE."
                           :optional? optional? :multiple? multiple?
                           :reference ref :substitution-group substitution-group)))
 
+(defun soap-resolve-references-for-xs-element (element wsdl)
+  (let ((type (soap-xs-element-type element)))
+    (cond ((stringp type)
+           (setf (soap-xs-element-type element)
+                 (soap-wsdl-get type wsdl 'soap-xs-type-p)))
+          ((soap-xs-type-p type)
+           ;; an inline defined type, this will not be reached from anywhere
+           ;; else, so we must resolve references now.
+           (soap-resolve-references type wsdl))))
+  (let ((reference (soap-xs-element-reference element)))
+    (when (stringp reference)
+      (setf (soap-xs-element-reference element)
+            (soap-wsdl-get reference wsdl 'soap-xs-element-p)))))
+
+(put (aref (make-soap-xs-element) 0) 
+     'soap-resolve-references #'soap-resolve-references-for-xs-element)
+
 (defstruct (soap-xs-attribute (:include soap-element))
   type                                  ; a simple type or basic type
   reference)
@@ -570,7 +587,23 @@ type-info stored in TYPE."
       (setq type (soap-xs-parse-simple-type 
                   (soap-xml-node-first-child node))))
     (make-soap-xs-attribute :name name :type type :reference ref)))
-           
+
+(defun soap-resolve-references-for-xs-attribute (attribute wsdl)
+  (let ((type (soap-xs-attribute-type attribute)))
+    (cond ((stringp type)
+           (setf (soap-xs-attribute-type attribute)
+                 (soap-wsdl-get type wsdl 'soap-xs-simple-type-p)))
+          ((soap-xs-type-p type)
+           ;; an inline defined type, this will not be reached from anywhere
+           ;; else, so we must resolve references now.
+           (soap-resolve-references type wsdl))))
+  (let ((reference (soap-xs-attribute-reference attribute)))
+    (when (stringp reference)
+      (setf (soap-xs-attribute-reference attribute)
+            (soap-wsdl-get reference wsdl 'soap-xs-element-p)))))
+
+(put (aref (make-soap-xs-attribute) 0) 
+     'soap-resolve-references #'soap-resolve-references-for-xs-attribute)
 
 (defstruct (soap-xs-simple-type (:include soap-xs-type))
   ;; A simple type is an extension on the basic type to which some
@@ -733,12 +766,35 @@ type-info stored in TYPE."
         (unless (>= value (car integer-range))
           (error 
          "xs-simple-type(%s, %s): small value, should be at least %s"
-         xml-tag value (soap-element-fq-name type) (car integer-range))))
+         value (soap-element-fq-name type) (car integer-range))))
       (when (cdr integer-range)
-        (unless (<= value (cdr ingeter-range))
+        (unless (<= value (cdr integer-range))
           (error 
          "xs-simple-type(%s, %s): big value, should be at most %s"
          value (soap-element-fq-name type) (cdr integer-range)))))))
+
+(defun soap-resolve-references-for-xs-simple-type (type wsdl)
+  (let ((base (soap-xs-simple-type-base type)))
+    (cond ((stringp base)
+           (setf (soap-xs-simple-type-base type)
+                 (soap-wsdl-get base wsdl 'soap-type-p)))
+          ((soap-type-p base)
+           (soap-resolve-references base wsdl))
+          ((listp base)
+           (setf (soap-xs-simple-type-base type)
+                 (mapcar (lambda (type)
+                           (cond ((stringp type)
+                                  (soap-wsdl-get base wsdl 'soap-type-p))
+                                 ((soap-type-p type)
+                                  (soap-resolve-references type wsdl)
+                                  type)
+                                 (t     ; signal an error?
+                                  type)))
+                         base))))))
+
+(put (aref (make-soap-xs-simple-type) 0)
+     'soap-resolve-references
+     'soap-resolve-references-for-xs-simple-type)
   
 (defstruct (soap-xs-complex-type (:include soap-xs-type))
   indicator                             ; sequence, choice, all, array
@@ -869,10 +925,23 @@ Return a SOAP-NAMESPACE containing the elements."
              (soap-namespace-put (soap-xs-parse-attribute def) ns))
             (xsd:simpleType
              (soap-namespace-put (soap-xs-parse-simple-type def) ns))
-            (xsd:complesType
+            (xsd:complexType
              (soap-namespace-put (soap-xs-parse-complex-type def) ns)))))
       ns)))
 
+(defun soap-resolve-references-for-xs-complex-type (type wsdl)
+  (let ((base (soap-xs-complex-type-base type)))
+    (cond ((stringp base)
+           (setf (soap-xs-complex-type-base type)
+                 (soap-wsdl-get base wsdl 'soap-xs-type-p)))
+          ((soap-xs-type-p base)
+           (soap-resolve-references base wsdl))))
+  (dolist (element (soap-xs-complex-type-elements type))
+    (soap-resolve-references element wsdl)))
+
+(put (aref (make-soap-xs-complex-type) 0)
+     'soap-resolve-references
+     'soap-resolve-references-for-xs-complex-type)
 
 ;;;; WSDL documents
 ;;;;; WSDL document elements
@@ -908,13 +977,6 @@ Return a SOAP-NAMESPACE containing the elements."
 (defstruct (soap-port (:include soap-element))
   service-url
   binding)
-
-
-(defun soap-type-p (element)
-  "Return t if ELEMENT is a SOAP data type (basic or complex)."
-  (or (soap-basic-type-p element)
-      (soap-sequence-type-p element)
-      (soap-array-type-p element)))
 
 
 ;;;;; The WSDL document
@@ -1019,7 +1081,7 @@ used to resolve the namespace alias."
 ;; See `soap-wsdl-resolve-references', which is the main entry point for
 ;; resolving references
 
-(defun soap-resolve-references-for-element (element wsdl)
+(defun soap-resolve-references (element wsdl)
   "Resolve references in ELEMENT using the WSDL document.
 This is a generic function which invokes a specific function
 depending on the element type.
@@ -1032,56 +1094,9 @@ updated."
     (when resolver
       (funcall resolver element wsdl))))
 
-(defun soap-resolve-references-for-simple-type (type wsdl)
-  "Resolve the base type for the simple TYPE using the WSDL
-  document."
-  (let ((kind (soap-basic-type-kind type)))
-    (unless (symbolp kind)
-      (let ((basic-type (soap-wsdl-get kind wsdl 'soap-basic-type-p)))
-        (setf (soap-basic-type-kind type)
-              (soap-basic-type-kind basic-type))))))
-
-(defun soap-resolve-references-for-sequence-type (type wsdl)
-  "Resolve references for a sequence TYPE using WSDL document.
-See also `soap-resolve-references-for-element' and
-`soap-wsdl-resolve-references'"
-  (let ((parent (soap-sequence-type-parent type)))
-    (when (or (consp parent) (stringp parent))
-      (setf (soap-sequence-type-parent type)
-            (soap-wsdl-get
-             parent wsdl
-             ;; Prevent self references, see Bug#9
-             (lambda (e) (and (not (eq e type)) (soap-type-p e)))))))
-  (dolist (element (soap-sequence-type-elements type))
-    (let ((element-type (soap-sequence-element-type element)))
-      (cond ((or (consp element-type) (stringp element-type))
-             (setf (soap-sequence-element-type element)
-                   (soap-wsdl-get
-                    element-type wsdl
-                    ;; Prevent self references, see Bug#9
-                    (lambda (e) (and (not (eq e type)) (soap-type-p e))))))
-            ((soap-element-p element-type)
-             ;; since the element already has a child element, it
-             ;; could be an inline structure.  we must resolve
-             ;; references in it, because it might not be reached by
-             ;; scanning the wsdl names.
-             (soap-resolve-references-for-element element-type wsdl))))))
-
-(defun soap-resolve-references-for-array-type (type wsdl)
-  "Resolve references for an array TYPE using WSDL.
-See also `soap-resolve-references-for-element' and
-`soap-wsdl-resolve-references'"
-  (let ((element-type (soap-array-type-element-type type)))
-    (when (or (consp element-type) (stringp element-type))
-      (setf (soap-array-type-element-type type)
-            (soap-wsdl-get
-             element-type wsdl
-             ;; Prevent self references, see Bug#9
-             (lambda (e) (and (not (eq e type)) (soap-type-p e))))))))
-
 (defun soap-resolve-references-for-message (message wsdl)
   "Resolve references for a MESSAGE type using the WSDL document.
-See also `soap-resolve-references-for-element' and
+See also `soap-resolve-references' and
 `soap-wsdl-resolve-references'"
   (let (resolved-parts)
     (dolist (part (soap-message-parts message))
@@ -1090,13 +1105,16 @@ See also `soap-resolve-references-for-element' and
         (when (stringp name)
           (setq name (intern name)))
         (when (or (consp type) (stringp type))
-          (setq type (soap-wsdl-get type wsdl 'soap-type-p)))
+          (setq type (soap-wsdl-get 
+                      type wsdl 
+                      (lambda (x)
+                        (or (soap-xs-type-p x) (soap-xs-element-p x))))))
         (push (cons name type) resolved-parts)))
      (setf (soap-message-parts message) (nreverse resolved-parts))))
 
 (defun soap-resolve-references-for-operation (operation wsdl)
   "Resolve references for an OPERATION type using the WSDL document.
-See also `soap-resolve-references-for-element' and
+See also `soap-resolve-references' and
 `soap-wsdl-resolve-references'"
   (let ((input (soap-operation-input operation))
         (counter 0))
@@ -1149,7 +1167,7 @@ See also `soap-resolve-references-for-element' and
 
 (defun soap-resolve-references-for-binding (binding wsdl)
  "Resolve references for a BINDING type using the WSDL document.
-See also `soap-resolve-references-for-element' and
+See also `soap-resolve-references' and
 `soap-wsdl-resolve-references'"
   (when (or (consp (soap-binding-port-type binding))
             (stringp (soap-binding-port-type binding)))
@@ -1165,7 +1183,7 @@ See also `soap-resolve-references-for-element' and
 
 (defun soap-resolve-references-for-port (port wsdl)
   "Resolve references for a PORT type using the WSDL document.
-See also `soap-resolve-references-for-element' and
+See also `soap-resolve-references' and
 `soap-wsdl-resolve-references'"
   (when (or (consp (soap-port-binding port))
             (stringp (soap-port-binding port)))
@@ -1213,13 +1231,13 @@ traverse an element tree."
         (maphash (lambda (name element)
                    (cond ((soap-element-p element) ; skip links
                           (incf nprocessed)
-                          (soap-resolve-references-for-element element wsdl)
+                          (soap-resolve-references element wsdl)
                           (setf (soap-element-namespace-tag element) nstag))
                          ((listp element)
                           (dolist (e element)
                             (when (soap-element-p e)
                               (incf nprocessed)
-                              (soap-resolve-references-for-element e wsdl)
+                              (soap-resolve-references e wsdl)
                               (setf (soap-element-namespace-tag e) nstag))))))
                  (soap-namespace-elements ns)))))
     wsdl)
