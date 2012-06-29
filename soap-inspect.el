@@ -55,57 +55,42 @@ will be called."
         (funcall sample-value type)
         (error "Cannot provide sample value for type %s" (aref type 0)))))
 
-(defun soap-sample-value-for-basic-type (type)
-  "Provide a sample value for TYPE which is a basic type.
-This is a specific function which should not be called directly,
-use `soap-sample-value' instead."
-  (case (soap-basic-type-kind type)
+(defun soap-sample-value-for-xs-element (element)
+  (cons (intern (soap-xs-element-name element))
+        (soap-sample-value (soap-xs-element-type
+                            (or (soap-xs-element-reference element)
+                                element)))))
+
+(defun soap-sample-value-for-xs-basic-type (type)
+  (case (soap-xs-basic-type-kind type)
     (string "a string value")
-    (boolean t)                         ; could be nil as well
-    ((long int) (random 4200))
-    ;; TODO: we need better sample values for more types.
+    (anyURI "an URI")
+    (QName "a QName")
+    (dateTime "a time-value-p or string")
+    (boolean "t or nil")
+    ((long int integer byte unsignedInt) 42)
+    ((float double) 3.14)
+    (base64Binary "a string")
     (t (format "%s" (soap-basic-type-kind type)))))
 
-(defun soap-sample-value-for-simple-type (type)
-  "Provive a sample value for TYPE which is a simple type.
-This is a specific function which should not be called directly,
-use `soap-sample-value' instead."
-  (let ((enumeration (soap-simple-type-enumeration type)))
-    (if (> (length enumeration) 1)
-        (elt enumeration (random (length enumeration)))
-        (soap-sample-value-for-basic-type type))))
+(defun soap-sample-value-for-xs-simple-type (type)
+  ;; NOTE: the sample value might not pass the simple type's restrictions.
+  ;; This could be improved.
+  (soap-sample-value (soap-xs-simple-type-base type)))
 
-(defun soap-sample-value-for-seqence-type (type)
-  "Provide a sample value for TYPE which is a sequence type.
-Values for sequence types are ALISTS of (slot-name . VALUE) for
-each sequence element.
-
-This is a specific function which should not be called directly,
-use `soap-sample-value' instead."
-  (let ((sample-value nil))
-    (dolist (element (soap-sequence-type-elements type))
-      (push (cons (soap-sequence-element-name element)
-                  (soap-sample-value (soap-sequence-element-type element)))
-            sample-value))
-    (when (soap-sequence-type-parent type)
-      (setq sample-value
-            (append (soap-sample-value (soap-sequence-type-parent type))
-                    sample-value)))
-    sample-value))
-
-(defun soap-sample-value-for-array-type (type)
-  "Provide a sample value for TYPE which is an array type.
-Values for array types are LISP vectors of values which are
-array's element type.
-
-This is a specific function which should not be called directly,
-use `soap-sample-value' instead."
-  (let* ((element-type (soap-array-type-element-type type))
-         (sample1 (soap-sample-value element-type))
-         (sample2 (soap-sample-value element-type)))
-    ;; Our sample value is a vector of two elements, but any number of
-    ;; elements are permissible
-    (vector sample1 sample2 '&etc)))
+(defun soap-sample-value-for-xs-complex-type (type)
+  (case (soap-xs-complex-type-indicator type)
+    (array
+     (let* ((element-type (soap-xs-complex-type-base type))
+            (sample1 (soap-sample-value element-type))
+            (sample2 (soap-sample-value element-type)))
+       ;; Our sample value is a vector of two elements, but any number of
+       ;; elements are permissible
+       (vector sample1 sample2 '&etc)))
+    ((sequence all)
+     (let ((base (soap-xs-complex-type-base type)))
+       (append (and base (soap-sample-value base))
+               (mapcar #'soap-sample-value (soap-xs-complex-type-elements type)))))))
 
 (defun soap-sample-value-for-message (message)
   "Provide a sample value for a WSDL MESSAGE.
@@ -121,17 +106,21 @@ use `soap-sample-value' instead."
 
 (progn
   ;; Install soap-sample-value methods for our types
-  (put (aref (make-soap-basic-type) 0) 'soap-sample-value
-       'soap-sample-value-for-basic-type)
+  (put (aref (make-soap-xs-basic-type) 0) 
+       'soap-sample-value
+       'soap-sample-value-for-xs-basic-type)
 
-  (put (aref (make-soap-simple-type) 0) 'soap-sample-value
-       'soap-sample-value-for-simple-type)
+  (put (aref (make-soap-xs-simple-type) 0) 
+       'soap-sample-value
+       'soap-sample-value-for-xs-simple-type)
 
-  (put (aref (make-soap-sequence-type) 0) 'soap-sample-value
-       'soap-sample-value-for-seqence-type)
+  (put (aref (make-soap-xs-complex-type) 0) 
+       'soap-sample-value
+       'soap-sample-value-for-xs-complex-type)
 
-  (put (aref (make-soap-array-type) 0) 'soap-sample-value
-       'soap-sample-value-for-array-type)
+  (put (aref (make-soap-xs-element) 0) 
+       'soap-sample-value
+       'soap-sample-value-for-xs-element)
 
   (put (aref (make-soap-message) 0) 'soap-sample-value
        'soap-sample-value-for-message) )
