@@ -464,7 +464,8 @@ instead."
          (insert (base64-encode-string value)))
 
         (otherwise
-         (error "don't know how to encode %s for type %s" value (soap-element-fq-name type)))))))
+         (error "don't know how to encode %s for type %s" 
+                value (soap-element-fq-name type)))))))
 
 (defun soap-decode-xs-basic-type (type node)
   "Use TYPE, a `soap-xs-basic-type', to decode the contents of NODE.
@@ -1230,15 +1231,21 @@ See also `soap-resolve-references' and
   (let (resolved-parts)
     (dolist (part (soap-message-parts message))
       (let ((name (car part))
-            (type (cdr part)))
+            (element (cdr part)))
         (when (stringp name)
           (setq name (intern name)))
-        (when (or (consp type) (stringp type))
-          (setq type (soap-wsdl-get 
-                      type wsdl 
-                      (lambda (x)
-                        (or (soap-xs-type-p x) (soap-xs-element-p x))))))
-        (push (cons name type) resolved-parts)))
+        (if (or (consp element) (stringp element))
+            (setq element (soap-wsdl-get 
+                        element wsdl 
+                        (lambda (x)
+                          (or (soap-xs-type-p x) (soap-xs-element-p x)))))
+            ;; else, inline element, resolve recursively, as the element
+            ;; won't be reached.
+            (soap-resolve-references element wsdl)
+            (unless (soap-element-namespace-tag element)
+              (setf (soap-element-namespace-tag element)
+                    (soap-element-namespace-tag message))))
+        (push (cons name element) resolved-parts)))
      (setf (soap-message-parts message) (nreverse resolved-parts))))
 
 (defun soap-resolve-references-for-operation (operation wsdl)
@@ -1366,8 +1373,8 @@ traverse an element tree."
                           (dolist (e element)
                             (when (soap-element-p e)
                               (incf nprocessed)
-                              (soap-resolve-references e wsdl)
-                              (setf (soap-element-namespace-tag e) nstag))))))
+                              (setf (soap-element-namespace-tag e) nstag)
+                              (soap-resolve-references e wsdl))))))
                  (soap-namespace-elements ns)))))
     wsdl)
 
@@ -1498,10 +1505,12 @@ calls."
         (when type
           (setq type (soap-l2fq type 'tns)))
 
-        (when element
-          (setq element (soap-l2fq element 'tns)))
+        (if element
+            (setq element (soap-l2fq element 'tns))
+            ;; else
+            (setq element (make-soap-xs-element :name name :type type)))
 
-        (push (cons name (or type element)) parts)))
+        (push (cons name element) parts)))
     (make-soap-message :name name :parts (nreverse parts))))
 
 (defun soap-parse-port-type (node)
@@ -1848,6 +1857,8 @@ work."
   (let ((encoder (get (aref type 0) 'soap-encoder)))
     (assert encoder nil "no soap-encoder for %s type" (aref type 0))
     (funcall encoder value type))
+  (unless (soap-element-namespace-tag type)
+    (debug))
   (add-to-list 'soap-encoded-namespaces (soap-element-namespace-tag type)))
 
 (defun soap-encode-body (operation parameters wsdl)
@@ -1877,13 +1888,10 @@ document."
                           collect (cons formal value))))
       (dolist (part (soap-message-parts message))
         (let* ((param-name (car part))
-               (type (cdr part))
-               (tag-name (if (eq use 'encoded)
-                             param-name
-                             (soap-element-name type)))
+               (element (cdr part))
                (value (cdr (assoc param-name param-table)))
                (start-pos (point)))
-          (soap-encode-value tag-name value type)
+          (soap-encode-value value element)
           (when (eq use 'literal)
             ;; hack: add the xmlns attribute to the tag, the only way
             ;; ASP.NET web services recognize the namespace of the
@@ -1891,7 +1899,7 @@ document."
             (save-excursion
               (goto-char start-pos)
               (when (re-search-forward " ")
-                (let* ((ns (soap-element-namespace-tag type))
+                (let* ((ns (soap-element-namespace-tag element))
                        (namespace (cdr (assoc ns
                                               (soap-wsdl-alias-table wsdl)))))
                   (when namespace
