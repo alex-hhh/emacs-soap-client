@@ -420,6 +420,16 @@ instead."
 
   (let ((kind (soap-xs-basic-type-kind type)))
 
+    (when (eq kind 'anyType)
+      (cond ((stringp value)
+             (setq kind 'string))
+            ((integerp value)
+             (setq kind 'int))
+            ((memq value '(t nil))
+             (setq kind 'boolean))
+            (t
+             (error "cannot classify anyType value"))))
+
     ;; NOTE: a nil value is not encoded, as an xsi:nil="true" attribute was
     ;; encoded for it.  However, we have some ambiguity here, as a nil value
     ;; also represents "false" when the type is boolean...
