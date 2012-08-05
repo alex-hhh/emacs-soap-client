@@ -523,11 +523,19 @@ This is a specialization of `soap-decode-type' for
   ;; maxOccurs.  Instead we support optional? and multiple?
 
   id
-  type
+  type^               ; note: use soap-xs-element-type to retrieve this member
   optional?
   multiple?
   reference
   substitution-group)
+
+(defun soap-xs-element-type (element)
+  "Retrieve the type of ELEMENT.
+This is normally stored in the TYPE^ slot, but if this element
+contains a reference, we retrive the type of the reference."
+  (if (soap-xs-element-reference element)
+      (soap-xs-element-type (soap-xs-element-reference element))
+      (soap-xs-element-type^ element)))
 
 (defun soap-xs-parse-element (node)
   "Construct a `soap-xs-element' from NODE."
@@ -565,7 +573,7 @@ This is a specialization of `soap-decode-type' for
                   ;; else
                   (error "Soap-xs-parse-element: node has no type and is not a ref"))))))
 
-    (make-soap-xs-element :name name :id id :type type
+    (make-soap-xs-element :name name :id id :type^ type
                           :optional? optional? :multiple? multiple?
                           :reference ref :substitution-group substitution-group)))
 
@@ -575,9 +583,9 @@ This is a specialization of `soap-resolve-references' for
 `soap-xs-element' objects.
 
 See also `soap-wsdl-resolve-references'."
-  (let ((type (soap-xs-element-type element)))
+  (let ((type (soap-xs-element-type^ element)))
     (cond ((or (stringp type) (consp type))
-           (setf (soap-xs-element-type element)
+           (setf (soap-xs-element-type^ element)
                  (soap-wsdl-get type wsdl 'soap-xs-type-p)))
           ((soap-xs-type-p type)
            ;; an inline defined type, this will not be reached from anywhere
@@ -604,9 +612,7 @@ position.
 This is a specialization of `soap-encode-value' for
 `soap-xs-basic-type' objects."
   (let ((name (soap-xs-element-name element))
-        (type (if (soap-xs-element-reference element)
-                  (soap-xs-element-type (soap-xs-element-reference element))
-                  (soap-xs-element-type element))))
+        (type (soap-xs-element-type element)))
     (insert "<" name)
     (soap-encode-attributes value type)
     (if value
@@ -623,9 +629,7 @@ type-info stored in ELEMENT.
 
 This is a specialization of `soap-decode-type' for
 `soap-xs-basic-type' objects."
-  (let ((type (if (soap-xs-element-reference element)
-                  (soap-xs-element-type (soap-xs-element-reference element))
-                  (soap-xs-element-type element))))
+  (let ((type (soap-xs-element-type element)))
     (soap-decode-type type node)))
 
 ;; Register methods for `soap-xs-element'
@@ -1626,7 +1630,7 @@ calls."
         (if element
             (setq element (soap-l2fq element 'tns))
             ;; else
-            (setq element (make-soap-xs-element :name name :type type)))
+            (setq element (make-soap-xs-element :name name :type^ type)))
 
         (push (cons name element) parts)))
     (make-soap-message :name name :parts (nreverse parts))))
