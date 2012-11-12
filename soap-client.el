@@ -285,8 +285,13 @@ be tagged with a namespace tag."
   "Return a fully qualified name for ELEMENT.
 A fq name is the concatenation of the namespace tag and the
 element name."
-  (concat (soap-element-namespace-tag element)
-          ":" (soap-element-name element)))
+  (cond ((soap-element-namespace-tag element)
+         (concat (soap-element-namespace-tag element)
+                 ":" (soap-element-name element)))
+        ((soap-element-name element)
+         (soap-element-name element))
+        (t
+         "*unnamed*")))
 
 ;; a namespace link stores an alias for an object in once namespace to a
 ;; "target" object possibly in a different namespace
