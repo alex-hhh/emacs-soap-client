@@ -131,9 +131,7 @@ This is a specialization of `soap-sample-value' for
   ;; NOTE: parameter order is not considered.
   (let (sample-value)
     (dolist (part (soap-message-parts message))
-      (push (cons (car part)
-                  (soap-sample-value (cdr part)))
-            sample-value))
+      (push (soap-sample-value (cdr part)) sample-value))
     (nreverse sample-value)))
 
 (progn
@@ -277,13 +275,13 @@ entire WSDL can be inspected."
   (when (soap-xs-simple-type-pattern type)
     (insert "\nPattern: " (soap-xs-simple-type-pattern type)))
   (when (car (soap-xs-simple-type-length-range type))
-    (insert "\nMin length: " (car (soap-xs-simple-type-length-range type))))
+    (insert "\nMin length: " (number-to-string (car (soap-xs-simple-type-length-range type)))))
   (when (cdr (soap-xs-simple-type-length-range type))
-    (insert "\nMin length: " (cdr (soap-xs-simple-type-length-range type))))
+    (insert "\nMin length: " (number-to-string (cdr (soap-xs-simple-type-length-range type)))))
   (when (car (soap-xs-simple-type-integer-range type))
-    (insert "\nMin value: " (car (soap-xs-simple-type-integer-range type))))
+    (insert "\nMin value: " (number-to-string (car (soap-xs-simple-type-integer-range type)))))
   (when (cdr (soap-xs-simple-type-integer-range type))
-    (insert "\nMin value: " (cdr (soap-xs-simple-type-integer-range type))))
+    (insert "\nMin value: " (number-to-string (cdr (soap-xs-simple-type-integer-range type)))))
   (insert "\nSample value:\n")
   (pp (soap-sample-value type) (current-buffer)))
               
