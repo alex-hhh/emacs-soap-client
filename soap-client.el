@@ -383,7 +383,8 @@ binding) but the same name."
   ;; Other type definitions reference basic types, so we need to create them
   ;; in a namespace (see `soap-make-xs-basic-types')
 
-  kind                              ; a symbol of: string, dateTime, long, int, etc
+  ;; a symbol of: string, dateTime, long, int, etc
+  kind
   )
 
 (defun soap-make-xs-basic-types (namespace-name &optional namespace-tag)
@@ -509,7 +510,8 @@ This is a specialization of `soap-decode-type' for
         (ecase kind
           ((string anyURI QName) (car contents))
           (dateTime (car contents))     ; TODO: convert to a date time
-          ((long int integer unsignedInt byte float double) (string-to-number (car contents)))
+          ((long int integer unsignedInt byte float double)
+           (string-to-number (car contents)))
           (boolean (string= (downcase (car contents)) "true"))
           (base64Binary (base64-decode-string (car contents)))
           (anyType (soap-decode-any-type node))
@@ -545,8 +547,7 @@ contains a reference, we retrive the type of the reference."
 (defun soap-xs-parse-element (node)
   "Construct a `soap-xs-element' from NODE."
   (assert (eq (soap-l2wk (xml-node-name node)) 'xsd:element)
-          "soap-xs-parse-element: expecting xsd:element, got %s"
-          (soap-l2wk (xml-node-name node)))
+          "expecting xsd:element, got %s" (soap-l2wk (xml-node-name node)))
   (let ((name (xml-get-attribute-or-nil node 'name))
         (id (xml-get-attribute-or-nil node 'id))
         (type (xml-get-attribute-or-nil node 'type))
@@ -571,16 +572,16 @@ contains a reference, we retrive the type of the reference."
         (if simple-type
             (setq type (soap-xs-parse-simple-type (car simple-type)))
             ;; else
-            
             (let ((complex-type (soap-xml-get-children1 node 'xsd:complexType)))
               (if complex-type
                   (setq type (soap-xs-parse-complex-type (car complex-type)))
                   ;; else
-                  (error "Soap-xs-parse-element: node has no type and is not a ref"))))))
+                  (error "Soap-xs-parse-element: node is missing type or ref"))))))
 
     (make-soap-xs-element :name name :id id :type^ type
                           :optional? optional? :multiple? multiple?
-                          :reference ref :substitution-group substitution-group)))
+                          :reference ref
+                          :substitution-group substitution-group)))
 
 (defun soap-resolve-references-for-xs-element (element wsdl)
   "Replace names in ELEMENT with the referenced objects in the WSDL.
@@ -653,8 +654,7 @@ This is a specialization of `soap-decode-type' for
 (defun soap-xs-parse-attribute (node)
   "Construct a `soap-xs-attribute' from NODE."
   (assert (eq (soap-l2wk (xml-node-name node)) 'xsd:attribute)
-          "soap-xs-parse-attribute: expecting xsd:attribute, got %s"
-          (soap-l2wk (xml-node-name node)))
+          "expecting xsd:attribute, got %s" (soap-l2wk (xml-node-name node)))
   (let ((name (xml-get-attribute-or-nil node 'name))
         (type (xml-get-attribute-or-nil node 'type))
         (ref (xml-get-attribute-or-nil node 'ref)))
@@ -705,11 +705,12 @@ See also `soap-wsdl-resolve-references'."
 
 (defun soap-xs-parse-simple-type (node)
   "Construct an `soap-xs-simple-type' object from the XML NODE."
-  (assert (memq (soap-l2wk (xml-node-name node)) '(xsd:simpleType xsd:simpleContent))
+  (assert (memq (soap-l2wk (xml-node-name node))
+                '(xsd:simpleType xsd:simpleContent))
           nil
-          "soap-xs-parse-simple-type: expecting xsd:simpleType or xsd:simpleContent node, got %s"
+          "expecting xsd:simpleType or xsd:simpleContent node, got %s"
           (soap-l2wk (xml-node-name node)))
-  
+
   ;; NOTE: name can be nil for inline types.  Such types cannot be added to a
   ;; namespace.
   (let ((name (xml-get-attribute-or-nil node 'name))
@@ -728,7 +729,7 @@ See also `soap-wsdl-resolve-references'."
 
   (assert (eq (soap-l2wk (xml-node-name node)) 'xsd:restriction)
           nil
-          "soap-xs-parse-restriction: expecting xsd:restriction node, got %s"
+          "expecting xsd:restriction node, got %s"
           (soap-l2wk (xml-node-name node)))
 
   (setf (soap-xs-simple-type-base type) (xml-get-attribute node 'base))
@@ -791,8 +792,7 @@ See also `soap-wsdl-resolve-references'."
   "Add union members defined in XML NODE to TYPE, an `soap-xs-simple-type'."
   (assert (eq (soap-l2wk (xml-node-name node)) 'xsd:union)
           nil
-          "soap-xs-parse-union: expecting xsd:union node, got %s"
-          (soap-l2wk (xml-node-name node)))
+          "expecting xsd:union node, got %s" (soap-l2wk (xml-node-name node)))
 
   (setf (soap-xs-simple-type-base type)
         (split-string
@@ -933,8 +933,7 @@ This is a specialization of `soap-decode-type' for
   (assert (memq (soap-l2wk (xml-node-name node))
                 '(xsd:complexType xsd:complexContent))
           nil
-          "soap-xs-parse-complex-type: unexpected node, %s"
-          (soap-l2wk (xml-node-name node)))
+          "unexpected node: %s" (soap-l2wk (xml-node-name node)))
 
   (let ((name (xml-get-attribute-or-nil node 'name))
         (id (xml-get-attribute-or-nil node 'id))
@@ -957,14 +956,15 @@ This is a specialization of `soap-decode-type' for
                  ((xsd:sequence xsd:all xsd:choice)
                   (soap-xs-parse-sequence def)))))))))
     (unless type
-      ;; the type has not been built, this is a shortcut for a simpleContent node
+      ;; the type has not been built, this is a shortcut for a simpleContent
+      ;; node
       (setq type (make-soap-xs-complex-type)))
 
     (setf (soap-xs-type-name type) name)
     (setf (soap-xs-type-id type) id)
     (setf (soap-xs-type-attributes type)
           (append attributes (soap-xs-type-attributes type)))
-  
+
     type))
 
 (defun soap-xs-parse-sequence (node)
@@ -973,8 +973,7 @@ Returns a `soap-xs-complex-type'"
   (assert (memq (soap-l2wk (xml-node-name node))
                 '(xsd:sequence xsd:choice xsd:all))
           nil
-          "soap-xs-parse-sequence: unexpected node, %s"
-          (soap-l2wk (xml-node-name node)))
+          "unexpected node: %s" (soap-l2wk (xml-node-name node)))
 
   (let ((type (make-soap-xs-complex-type)))
 
@@ -990,11 +989,11 @@ Returns a `soap-xs-complex-type'"
 
     (setf (soap-xs-complex-type-elements type)
           (nreverse (soap-xs-complex-type-elements type)))
-    
+
     (dolist (attribute (soap-xml-get-children1 node 'xsd:attribute))
       (push (soap-xs-parse-attribute attribute)
             (soap-xs-type-attributes type)))
-    
+
     type))
 
 (defun soap-xs-parse-extension-or-restriction (node)
@@ -1003,8 +1002,7 @@ Return a `soap-xs-complex-type'."
   (assert (memq (soap-l2wk (xml-node-name node))
                 '(xsd:extension xsd:restriction))
           nil
-          "soap-xs-parse-extension: unexpected node, %s"
-          (soap-l2wk (xml-node-name node)))
+          "unexpected node: %s" (soap-l2wk (xml-node-name node)))
   (let (type
         attributes
         array?
@@ -1092,7 +1090,7 @@ This is a specialization of `soap-encode-value' for
                (insert "</" tag ">")))))
     ((sequence all)
      (let ((type-list (list type)))
-       
+
        ;; Collect all base types
        (let ((base (soap-xs-complex-type-base type)))
          (while base
@@ -1155,7 +1153,7 @@ This is a specialization of `soap-decode-type' for
            ;; Do some sanity checking
            (cond ((and (= instance-count 0)
                        (not (soap-xs-element-optional? element)))
-                  (soap-warning "While decoding %s: missing non-nillable slot %s"
+                  (soap-warning "missing non-nillable slot %s while decoding %s"
                                 (soap-xs-element-name element) e-name))
                  ((and (> instance-count 1)
                        (not (soap-xs-element-multiple? element)))
@@ -1181,7 +1179,7 @@ Return a SOAP-NAMESPACE containing the elements."
   (soap-with-local-xmlns node
     (assert (eq (soap-l2wk (xml-node-name node)) 'xsd:schema)
             nil
-            "soap-parse-schema: expecting an xsd:schema node, got %s"
+            "expecting an xsd:schema node, got %s"
             (soap-l2wk (xml-node-name node)))
 
     (let ((ns (make-soap-namespace :name (soap-get-target-namespace node))))
@@ -1311,7 +1309,7 @@ used to resolve the namespace alias."
              (setq namespace (soap-wsdl-find-namespace ns-name wsdl))
              (unless namespace
                (error
-                "Soap-wsdl-get(%s): unknown namespace %s, referenced by alias %s"
+                "Soap-wsdl-get(%s): unknown namespace %s, referenced as %s"
                 name ns-name ns-alias))))
           (t
            (error "Soap-wsdl-get(%s): bad name" name)))
@@ -1551,7 +1549,7 @@ calls."
 
     (assert (eq (soap-l2wk (xml-node-name node)) 'wsdl:definitions)
             nil
-            "soap-parse-wsdl: expecting wsdl:definitions node, got %s"
+            "expecting wsdl:definitions node, got %s"
             (soap-l2wk (xml-node-name node)))
 
     (let ((wsdl (make-soap-wsdl)))
@@ -1620,7 +1618,7 @@ calls."
   "Parse NODE as a wsdl:message and return the corresponding type."
   (assert (eq (soap-l2wk (xml-node-name node)) 'wsdl:message)
           nil
-          "soap-parse-message: expecting wsdl:message node, got %s"
+          "expecting wsdl:message node, got %s"
           (soap-l2wk (xml-node-name node)))
   (let ((name (xml-get-attribute-or-nil node 'name))
         parts)
@@ -1644,7 +1642,7 @@ calls."
   "Parse NODE as a wsdl:portType and return the corresponding port."
   (assert (eq (soap-l2wk (xml-node-name node)) 'wsdl:portType)
           nil
-          "soap-parse-port-type: expecting wsdl:portType node got %s"
+          "expecting wsdl:portType node got %s"
           (soap-l2wk (xml-node-name node)))
   (let ((ns (make-soap-namespace
              :name (concat "urn:" (xml-get-attribute node 'name)))))
@@ -1683,7 +1681,7 @@ calls."
   "Parse NODE as a wsdl:operation and return the corresponding type."
   (assert (eq (soap-l2wk (xml-node-name node)) 'wsdl:operation)
           nil
-          "soap-parse-operation: expecting wsdl:operation node, got %s"
+          "expecting wsdl:operation node, got %s"
           (soap-l2wk (xml-node-name node)))
   (let ((name (xml-get-attribute node 'name))
         (parameter-order (split-string
@@ -1716,7 +1714,7 @@ calls."
   "Parse NODE as a wsdl:binding and return the corresponding type."
   (assert (eq (soap-l2wk (xml-node-name node)) 'wsdl:binding)
           nil
-          "soap-parse-binding: expecting wsdl:binding node, got %s"
+          "expecting wsdl:binding node, got %s" 
           (soap-l2wk (xml-node-name node)))
   (let ((name (xml-get-attribute node 'name))
         (type (xml-get-attribute node 'type)))
@@ -1800,8 +1798,8 @@ decode function to perform the actual decoding."
              (if (equal (soap-xml-get-attribute-or-nil1 node 'xsi:nil) "true")
                  nil
                  (let ((decoder (get (aref type 0) 'soap-decoder)))
-                   (assert decoder nil "no soap-decoder for %s type"
-                           (aref type 0))
+                   (assert decoder nil
+                           "no soap-decoder for %s type" (aref type 0))
                    (funcall decoder type node))))))))
 
 (defun soap-decode-any-type (node)
@@ -1814,7 +1812,7 @@ decode function to perform the actual decoding."
               (soap-decode-type wtype node)
               ;; The node has type info encoded in it, but we don't know how
               ;; to decode it...
-              (error "Soap-decode-any-type: node has unknown type: %s" type)))
+              (error "node has unknown type: %s" type)))
 
         ;; No type info in the node...
 
@@ -1869,7 +1867,7 @@ WSDL is used to decode the NODE"
   (soap-with-local-xmlns node
     (assert (eq (soap-l2wk (xml-node-name node)) 'soap:Envelope)
             nil
-            "soap-parse-envelope: expecting soap:Envelope node, got %s"
+            "expecting soap:Envelope node, got %s"
             (soap-l2wk (xml-node-name node)))
     (let ((body (car (soap-xml-get-children1 node 'soap:Body))))
 
@@ -1975,7 +1973,8 @@ for the type and calls that specialized function to do the work.
 Attributes are inserted in the current buffer at the current
 position."
   (let ((attribute-encoder (get (aref type 0) 'soap-attribute-encoder)))
-    (assert attribute-encoder nil "no soap-attribute-encoder for %s type" (aref type 0))
+    (assert attribute-encoder nil
+            "no soap-attribute-encoder for %s type" (aref type 0))
     (funcall attribute-encoder value type)))
 
 (defun soap-encode-value (value type)

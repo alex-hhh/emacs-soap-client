@@ -81,7 +81,7 @@ objects."
   "Provide a sample value for TYPE, a `soap-xs-simple-type'.
 This is a specialization of `soap-sample-value' for
 `soap-xs-simple-type' objects."
-  (cond 
+  (cond
     ((soap-xs-simple-type-enumeration type)
      (let ((enumeration (soap-xs-simple-type-enumeration type)))
        (nth (random (length enumeration)) enumeration)))
@@ -89,8 +89,9 @@ This is a specialization of `soap-sample-value' for
      (format "a string matching %s" (soap-xs-simple-type-pattern type)))
     ((soap-xs-simple-type-length-range type)
      (destructuring-bind (low . high) (soap-xs-simple-type-length-range type)
-       (cond 
-         ((and low high) (format "a string between %d and %d chars long" low high))
+       (cond
+         ((and low high)
+          (format "a string between %d and %d chars long" low high))
          (low (format "a string at least %d chars long" low))
          (high (format "a string at most %d chars long" high))
          (t (format "a string OOPS")))))
@@ -122,7 +123,8 @@ This is a specialization of `soap-sample-value' for
     ((sequence all)
      (let ((base (soap-xs-complex-type-base type)))
        (append (and base (soap-sample-value base))
-               (mapcar #'soap-sample-value (soap-xs-complex-type-elements type)))))))
+               (mapcar #'soap-sample-value
+                       (soap-xs-complex-type-elements type)))))))
 
 (defun soap-sample-value-for-message (message)
   "Provide a sample value for a WSDL MESSAGE.
@@ -136,7 +138,7 @@ This is a specialization of `soap-sample-value' for
 
 (progn
   ;; Install soap-sample-value methods for our types
-  (put (aref (make-soap-xs-basic-type) 0) 
+  (put (aref (make-soap-xs-basic-type) 0)
        'soap-sample-value
        'soap-sample-value-for-xs-basic-type)
 
@@ -144,15 +146,15 @@ This is a specialization of `soap-sample-value' for
        'soap-sample-value
        'soap-sample-value-for-xs-element)
 
-  (put (aref (make-soap-xs-simple-type) 0) 
+  (put (aref (make-soap-xs-simple-type) 0)
        'soap-sample-value
        'soap-sample-value-for-xs-simple-type)
 
-  (put (aref (make-soap-xs-complex-type) 0) 
+  (put (aref (make-soap-xs-complex-type) 0)
        'soap-sample-value
        'soap-sample-value-for-xs-complex-type)
 
-  (put (aref (make-soap-message) 0) 
+  (put (aref (make-soap-message) 0)
        'soap-sample-value
        'soap-sample-value-for-message))
 
@@ -230,12 +232,6 @@ entire WSDL can be inspected."
    'type 'soap-client-describe-link
    'item element))
 
-;; DONE soap-inspect-xs-basic-type
-;; DONE soap-inspect-xs-element
-;; soap-inspect-xs-simple-type
-;; soap-inspect-xs-complex-type
-;; soap-inspect-message
-
 (defun soap-inspect-xs-basic-type (type)
   "Insert information about TYPE, a soap-xs-basic-type, in the current buffer."
   (insert "Basic type: " (soap-element-fq-name type))
@@ -252,7 +248,7 @@ entire WSDL can be inspected."
     (insert " optional"))
   (when (soap-xs-element-multiple? element)
     (insert " multiple"))
-  (insert "\nSample value:\n") 
+  (insert "\nSample value:\n")
   (pp (soap-sample-value element) (current-buffer)))
 
 (defun soap-inspect-xs-simple-type (type)
@@ -275,22 +271,27 @@ entire WSDL can be inspected."
   (when (soap-xs-simple-type-pattern type)
     (insert "\nPattern: " (soap-xs-simple-type-pattern type)))
   (when (car (soap-xs-simple-type-length-range type))
-    (insert "\nMin length: " (number-to-string (car (soap-xs-simple-type-length-range type)))))
+    (insert "\nMin length: "
+            (number-to-string (car (soap-xs-simple-type-length-range type)))))
   (when (cdr (soap-xs-simple-type-length-range type))
-    (insert "\nMin length: " (number-to-string (cdr (soap-xs-simple-type-length-range type)))))
+    (insert "\nMin length: "
+            (number-to-string (cdr (soap-xs-simple-type-length-range type)))))
   (when (car (soap-xs-simple-type-integer-range type))
-    (insert "\nMin value: " (number-to-string (car (soap-xs-simple-type-integer-range type)))))
+    (insert "\nMin value: "
+            (number-to-string (car (soap-xs-simple-type-integer-range type)))))
   (when (cdr (soap-xs-simple-type-integer-range type))
-    (insert "\nMin value: " (number-to-string (cdr (soap-xs-simple-type-integer-range type)))))
+    (insert "\nMin value: "
+            (number-to-string (cdr (soap-xs-simple-type-integer-range type)))))
   (insert "\nSample value:\n")
   (pp (soap-sample-value type) (current-buffer)))
-              
+
 (defun soap-inspect-xs-complex-type (type)
-  "Insert information about TYPE, a soap-xs-complex-type, in the current buffer."
+  "Insert information about TYPE, a soap-xs-complex-type, in the
+current buffer."
   (insert "Complex type: " (soap-element-fq-name type))
   (insert "\nKind: ")
   (case (soap-xs-complex-type-indicator type)
-    ((sequence all) 
+    ((sequence all)
      (insert "a sequence ")
      (when (soap-xs-complex-type-base type)
        (insert "extending ")
@@ -299,22 +300,28 @@ entire WSDL can be inspected."
      (let ((name-width 0)
            (type-width 0))
        (dolist (element (soap-xs-complex-type-elements type))
-         (setq name-width (max name-width (length (soap-xs-element-name element))))
-         (setq type-width (max type-width (length (soap-element-fq-name (soap-xs-element-type element))))))
+         (let ((name (soap-xs-element-name element))
+               (type (soap-xs-element-type element)))
+           (setq name-width (max name-width (length name)))
+           (setq type-width
+                 (max type-width (length (soap-element-fq-name type))))))
        (setq name-width (+ name-width 2))
        (setq type-width (+ type-width 2))
        (dolist (element (soap-xs-complex-type-elements type))
-         (insert "\n\t")
-         (insert (soap-xs-element-name element))
-         (insert (make-string (- name-width (length (soap-xs-element-name element))) ?\ ))
-         (soap-insert-describe-button (soap-xs-element-type element))
-         (insert (make-string 
-                  (- type-width (length (soap-element-fq-name (soap-xs-element-type element)))) ?\ ))
+         (let ((name (soap-xs-element-name element))
+               (type (soap-xs-element-type element)))
+           (insert "\n\t")
+           (insert name)
+           (insert (make-string (- name-width (length name)) ?\ ))
+           (soap-insert-describe-button type)
+           (insert
+            (make-string
+             (- type-width (length (soap-element-fq-name type))) ?\ ))
          (when (soap-xs-element-multiple? element)
            (insert " multiple"))
          (when (soap-xs-element-optional? element)
-           (insert " optional")))))
-    (choice 
+           (insert " optional"))))))
+    (choice
      (insert "a choice ")
      (when (soap-xs-complex-type-base type)
        (insert "extending ")
@@ -323,7 +330,7 @@ entire WSDL can be inspected."
      (dolist (element (soap-xs-complex-type-elements type))
        (insert "\n\t")
        (soap-insert-describe-button element)))
-    (array 
+    (array
      (insert "an array of ")
      (soap-insert-describe-button (soap-xs-complex-type-base type))))
   (insert "\nSample value:\n")
@@ -354,10 +361,11 @@ entire WSDL can be inspected."
 
   (insert "\n\nSample invocation:\n")
   (let ((sample-message-value
-	 (soap-sample-value (cdr (soap-operation-input operation))))
-        (funcall (list 'soap-invoke '*WSDL* "SomeService" (soap-element-name operation))))
+         (soap-sample-value (cdr (soap-operation-input operation))))
+        (funcall (list 'soap-invoke '*WSDL* "SomeService"
+                       (soap-element-name operation))))
     (let ((sample-invocation
-	   (append funcall (mapcar 'cdr sample-message-value))))
+           (append funcall (mapcar 'cdr sample-message-value))))
       (pp sample-invocation (current-buffer)))))
 
 (defun soap-inspect-port-type (port-type)
