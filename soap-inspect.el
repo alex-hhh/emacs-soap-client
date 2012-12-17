@@ -68,14 +68,16 @@ objects."
     ((long int integer byte unsignedInt) 42)
     ((float double) 3.14)
     (base64Binary "a string")
-    (t (format "%s" (soap-basic-type-kind type)))))
+    (t (format "%s" (soap-xs-basic-type-kind type)))))
 
 (defun soap-sample-value-for-xs-element (element)
   "Provide a sample value for ELEMENT, a WSDL element.
 This is a specialization of `soap-sample-value' for xs-element
 objects."
-  (cons (intern (soap-xs-element-name element))
-        (soap-sample-value (soap-xs-element-type element))))
+  (if (soap-xs-element-name element)
+      (cons (intern (soap-xs-element-name element))
+            (soap-sample-value (soap-xs-element-type element)))
+      (soap-sample-value (soap-xs-element-type element))))
 
 (defun soap-sample-value-for-xs-simple-type (type)
   "Provide a sample value for TYPE, a `soap-xs-simple-type'.
@@ -105,7 +107,7 @@ This is a specialization of `soap-sample-value' for
     ((consp (soap-xs-simple-type-base type)) ; an union of values
      (let ((base (soap-xs-simple-type-base type)))
        (soap-sample-value (nth (random (length base)) base))))
-    ((soap-basic-type-p (soap-xs-simple-type-base type))
+    ((soap-xs-basic-type-p (soap-xs-simple-type-base type))
      (soap-sample-value (soap-xs-simple-type-base type)))))
 
 (defun soap-sample-value-for-xs-complex-type (type)
@@ -120,7 +122,7 @@ This is a specialization of `soap-sample-value' for
        ;; Our sample value is a vector of two elements, but any number of
        ;; elements are permissible
        (vector sample1 sample2 '&etc)))
-    ((sequence all)
+    ((sequence choice all)
      (let ((base (soap-xs-complex-type-base type)))
        (append (and base (soap-sample-value base))
                (mapcar #'soap-sample-value
@@ -300,7 +302,7 @@ current buffer."
      (let ((name-width 0)
            (type-width 0))
        (dolist (element (soap-xs-complex-type-elements type))
-         (let ((name (soap-xs-element-name element))
+         (let ((name (or (soap-xs-element-name element) "*inline*"))
                (type (soap-xs-element-type element)))
            (setq name-width (max name-width (length name)))
            (setq type-width
@@ -308,7 +310,7 @@ current buffer."
        (setq name-width (+ name-width 2))
        (setq type-width (+ type-width 2))
        (dolist (element (soap-xs-complex-type-elements type))
-         (let ((name (soap-xs-element-name element))
+         (let ((name (or (soap-xs-element-name element) "*inline*"))
                (type (soap-xs-element-type element)))
            (insert "\n\t")
            (insert name)

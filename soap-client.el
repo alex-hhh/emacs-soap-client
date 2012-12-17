@@ -619,14 +619,18 @@ This is a specialization of `soap-encode-value' for
 `soap-xs-basic-type' objects."
   (let ((name (soap-xs-element-name element))
         (type (soap-xs-element-type element)))
-    (insert "<" name)
-    (soap-encode-attributes value type)
-    (if value
-        (progn (insert ">")
-               (soap-encode-value value type)
-               (insert "</" name ">\n"))
-        ;; else
-        (insert "/>\n"))))
+    (if name
+        (progn
+          (insert "<" name)
+          (soap-encode-attributes value type)
+          (if value
+              (progn (insert ">")
+                     (soap-encode-value value type)
+                     (insert "</" name ">\n"))
+              ;; else
+              (insert "/>\n")))
+        (if value
+            (soap-encode-value value type)))))
 
 (defun soap-decode-xs-element (element node)
   "Use ELEMENT, a `soap-xs-element', to decode the contents of NODE.
@@ -983,16 +987,23 @@ Returns a `soap-xs-complex-type'"
             (xsd:all 'all)
             (xsd:choice 'choice)))
 
-    (dolist (element (soap-xml-get-children1 node 'xsd:element))
-      (push (soap-xs-parse-element element)
-            (soap-xs-complex-type-elements type)))
+    (dolist (r (xml-node-children node))
+      (unless (stringp r)                 ; skip the white space
+        (case (soap-l2wk (xml-node-name r))
+          (xsd:element
+           (push (soap-xs-parse-element r)
+                 (soap-xs-complex-type-elements type)))
+          ((xsd:sequence xsd:choice xsd:all)
+           ;; an inline sequence, choice or all node
+           (let ((choice (soap-xs-parse-sequence r)))
+             (push (make-soap-xs-element :name nil :type^ choice)
+                   (soap-xs-complex-type-elements type))))
+          (xsd:attribute
+           (push (soap-xs-parse-attribute r)
+                 (soap-xs-type-attributes type))))))
 
     (setf (soap-xs-complex-type-elements type)
           (nreverse (soap-xs-complex-type-elements type)))
-
-    (dolist (attribute (soap-xml-get-children1 node 'xsd:attribute))
-      (push (soap-xs-parse-attribute attribute)
-            (soap-xs-type-attributes type)))
 
     type))
 
@@ -1088,7 +1099,7 @@ This is a specialization of `soap-encode-value' for
                (insert "<" tag ">")
                (soap-encode-value (aref value i) element-type)
                (insert "</" tag ">")))))
-    ((sequence all)
+    ((sequence choice all)
      (let ((type-list (list type)))
 
        ;; Collect all base types
@@ -1097,29 +1108,32 @@ This is a specialization of `soap-encode-value' for
            (push base type-list)
            (setq base (soap-xs-complex-type-base base))))
 
-       (dolist (type type-list)
-         (dolist (element (soap-xs-complex-type-elements type))
-           (let ((instance-count 0)
-                 (e-name (intern (soap-xs-element-name element))))
-
-             (dolist (v value)
-               (when (equal (car v) e-name)
-                 (incf instance-count)
-                 (soap-encode-value (cdr v) element)))
-
-             ;; Do some sanity checking
-             (cond ((and (= instance-count 0)
-                         (not (soap-xs-element-optional? element)))
-                    (soap-warning
+       (catch 'done
+         (dolist (type type-list)
+           (dolist (element (soap-xs-complex-type-elements type))
+             (let ((instance-count 0)
+                   (e-name (intern (soap-xs-element-name element))))
+               
+               (dolist (v value)
+                 (when (equal (car v) e-name)
+                   (incf instance-count)
+                   (soap-encode-value (cdr v) element)))
+               
+               ;; Do some sanity checking
+               (cond ((and (eq (soap-xs-complex-type-indicator type) 'choice)
+                           (> instance-count 0))
+                      ;; This was a choice node and we encoded one instance
+                      (throw 'done t))
+                     ((and (= instance-count 0)
+                           (not (soap-xs-element-optional? element)))
+                      (soap-warning
                      "While encoding %s: missing non-nillable slot %s"
                      (soap-xs-element-name element) e-name))
-                   ((and (> instance-count 1)
-                         (not (soap-xs-element-multiple? element)))
+                     ((and (> instance-count 1)
+                           (not (soap-xs-element-multiple? element)))
                     (soap-warning
                      "While encoding %s: multiple slots named %s"
-                     (soap-xs-element-name element) e-name))))))))
-    (choice
-     (error "Don't know how to encode choice types :-("))
+                     (soap-xs-element-name element) e-name)))))))))
     (t
      (error "Don't know how to encode complex type: %s"
             (soap-xs-complex-type-indicator type)))))
@@ -1139,29 +1153,37 @@ This is a specialization of `soap-decode-type' for
          (when (consp node)
            (push (soap-decode-type element-type node) result)))
        (nreverse result)))
-    ((sequence all)
+    ((sequence choice all)
      (let ((result nil)
            (base (soap-xs-complex-type-base type)))
        (when base
          (setq result (nreverse (soap-decode-type base node))))
-       (dolist (element (soap-xs-complex-type-elements type))
-         (let ((instance-count 0)
-               (e-name (intern (soap-xs-element-name element))))
-           (dolist (node (xml-get-children node e-name))
-             (incf instance-count)
-             (push (cons e-name (soap-decode-type element node)) result))
-           ;; Do some sanity checking
-           (cond ((and (= instance-count 0)
-                       (not (soap-xs-element-optional? element)))
-                  (soap-warning "missing non-nillable slot %s while decoding %s"
-                                (soap-xs-element-name element) e-name))
-                 ((and (> instance-count 1)
-                       (not (soap-xs-element-multiple? element)))
-                  (soap-warning "While decoding %s: multiple slots named %s"
-                                (soap-xs-element-name element) e-name)))))
+       (catch 'done
+         (dolist (element (soap-xs-complex-type-elements type))
+           (let* ((instance-count 0)
+                  (e-name (intern (soap-xs-element-name element)))
+                  (children (if e-name (xml-get-children node e-name) (list node))))
+             (dolist (node children)
+               (incf instance-count)
+               (push (cons e-name (soap-decode-type element node)) result))
+
+             (cond ((and (eq (soap-xs-complex-type-indicator type) 'choice)
+                         (> instance-count 0))
+                    ;; This was a choice node, and we decoded one value.
+                    (throw 'done t))
+
+                   ;; Do some sanity checking
+                   ((and (= instance-count 0)
+                         (not (soap-xs-element-optional? element)))
+                    (soap-warning "missing non-nillable slot %s while decoding %s"
+                                  (soap-xs-element-name element) e-name))
+                   ((and (> instance-count 1)
+                         (not (soap-xs-element-multiple? element)))
+                    (soap-warning "While decoding %s: multiple slots named %s"
+                                  (soap-xs-element-name element) e-name))))))
        (nreverse result)))
     (t
-     (error "Don't know how to encode complex type: %s"
+     (error "Don't know how to decode complex type: %s"
             (soap-xs-complex-type-indicator type)))))
 
 ;; Register methods for `soap-xs-complex-type'
