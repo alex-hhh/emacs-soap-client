@@ -124,9 +124,12 @@ This is a specialization of `soap-sample-value' for
        (vector sample1 sample2 '&etc)))
     ((sequence choice all)
      (let ((base (soap-xs-complex-type-base type)))
-       (append (and base (soap-sample-value base))
-               (mapcar #'soap-sample-value
-                       (soap-xs-complex-type-elements type)))))))
+       (let ((value (append (and base (soap-sample-value base))
+                            (mapcar #'soap-sample-value
+                                    (soap-xs-complex-type-elements type)))))
+         (if (eq (soap-xs-complex-type-indicator type) 'choice)
+             (cons '***choice-of*** value)
+             value))))))
 
 (defun soap-sample-value-for-message (message)
   "Provide a sample value for a WSDL MESSAGE.

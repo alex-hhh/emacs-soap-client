@@ -1112,28 +1112,35 @@ This is a specialization of `soap-encode-value' for
          (dolist (type type-list)
            (dolist (element (soap-xs-complex-type-elements type))
              (let ((instance-count 0)
-                   (e-name (intern (soap-xs-element-name element))))
-               
-               (dolist (v value)
-                 (when (equal (car v) e-name)
-                   (incf instance-count)
-                   (soap-encode-value (cdr v) element)))
+                   (e-name (soap-xs-element-name element)))
+
+               (if e-name
+                   (progn
+                     (setq e-name (intern e-name))
+                     (dolist (v value)
+                       (when (equal (car v) e-name)
+                         (incf instance-count)
+                         (soap-encode-value (cdr v) element))))
+                   (progn
+                     (incf instance-count)
+                     (soap-encode-value value element)))
                
                ;; Do some sanity checking
                (cond ((and (eq (soap-xs-complex-type-indicator type) 'choice)
                            (> instance-count 0))
                       ;; This was a choice node and we encoded one instance
                       (throw 'done t))
-                     ((and (= instance-count 0)
+                     ((and (not (eq (soap-xs-complex-type-indicator type) 'choice))
+                           (= instance-count 0)
                            (not (soap-xs-element-optional? element)))
                       (soap-warning
-                     "While encoding %s: missing non-nillable slot %s"
-                     (soap-xs-element-name element) e-name))
+                       "While encoding %s: missing non-nillable slot %s"
+                       (soap-xs-element-name element) e-name))
                      ((and (> instance-count 1)
                            (not (soap-xs-element-multiple? element)))
-                    (soap-warning
-                     "While encoding %s: multiple slots named %s"
-                     (soap-xs-element-name element) e-name)))))))))
+                      (soap-warning
+                       "While encoding %s: multiple slots named %s"
+                       (soap-xs-element-name element) e-name)))))))))
     (t
      (error "Don't know how to encode complex type: %s"
             (soap-xs-complex-type-indicator type)))))
@@ -2011,9 +2018,8 @@ work."
   (let ((encoder (get (aref type 0) 'soap-encoder)))
     (assert encoder nil "no soap-encoder for %s type" (aref type 0))
     (funcall encoder value type))
-  (unless (soap-element-namespace-tag type)
-    (debug))
-  (add-to-list 'soap-encoded-namespaces (soap-element-namespace-tag type)))
+  (when (soap-element-namespace-tag type)
+    (add-to-list 'soap-encoded-namespaces (soap-element-namespace-tag type))))
 
 (defun soap-encode-body (operation parameters wsdl)
   "Create the body of a SOAP request for OPERATION in the current buffer.
