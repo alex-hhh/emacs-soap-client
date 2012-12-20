@@ -1743,7 +1743,7 @@ calls."
   "Parse NODE as a wsdl:binding and return the corresponding type."
   (assert (eq (soap-l2wk (xml-node-name node)) 'wsdl:binding)
           nil
-          "expecting wsdl:binding node, got %s" 
+          "expecting wsdl:binding node, got %s"
           (soap-l2wk (xml-node-name node)))
   (let ((name (xml-get-attribute node 'name))
         (type (xml-get-attribute node 'type)))
@@ -1841,7 +1841,7 @@ decode function to perform the actual decoding."
               (soap-decode-type wtype node)
               ;; The node has type info encoded in it, but we don't know how
               ;; to decode it...
-              (error "node has unknown type: %s" type)))
+              (error "Node has unknown type: %s" type)))
 
         ;; No type info in the node...
 
