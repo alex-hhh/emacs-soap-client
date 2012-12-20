@@ -291,8 +291,8 @@ entire WSDL can be inspected."
   (pp (soap-sample-value type) (current-buffer)))
 
 (defun soap-inspect-xs-complex-type (type)
-  "Insert information about TYPE, a soap-xs-complex-type, in the
-current buffer."
+  "Insert information about TYPE in the current buffer.
+TYPE is a `soap-xs-complex-type'"
   (insert "Complex type: " (soap-element-fq-name type))
   (insert "\nKind: ")
   (case (soap-xs-complex-type-indicator type)
@@ -435,12 +435,6 @@ current buffer."
 
 (progn
   ;; Install the soap-inspect methods for our types
-
-  ;; DONE soap-inspect-xs-basic-type
-  ;; DONE soap-inspect-xs-element
-  ;; soap-inspect-xs-simple-type
-  ;; soap-inspect-xs-complex-type
-
 
   (put (aref (make-soap-xs-basic-type) 0) 'soap-inspect
        'soap-inspect-xs-basic-type)
