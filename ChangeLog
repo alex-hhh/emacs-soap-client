@@ -1,3 +1,15 @@
+2013-04-03  Alex Harsanyi  <AlexHarsanyi@gmail.com>
+
+	* soap-client.el (soap-resolve-references-for-xs-attribute):
+	referenced type can be eiher a simple type or a basic type
+	(soap-xs-add-restriction)
+	(soap-xs-parse-extension-or-restriction): use `soap-l2fq' on base
+
+	* soap-client.el (soap-l2wk): bugfix: call symbolp instead of
+	symbol-name
+	(soap-l2fq): make the name part always a string
+	(soap-name-p): new defun, used for name tests
+
 2012-12-19  Alex Harsanyi  <AlexHarsanyi@gmail.com>
 
 	* soap-inspect.el (soap-sample-value-for-xs-complex-type): supply
