@@ -399,8 +399,12 @@ binding) but the same name."
   "Construct NAMESPACE-NAME containing the XMLSchema basic types.
 An optional NAMESPACE-TAG can also be specified."
   (let ((ns (make-soap-namespace :name namespace-name)))
-    (dolist (type '("string" "dateTime" "boolean"
-                    "long" "int" "integer" "unsignedInt" "byte" "float" "double"
+    (dolist (type '("string" "ID" "IDREF" "dateTime" "boolean"
+                    "long" "short" "int" "integer" 
+                    "unsignedLong" "unsignedShort" "unsignedInt" 
+                    "decimal" "duration"
+                    "byte" "unsignedByte"
+                    "float" "double"
                     "base64Binary" "anyType" "anyURI" "QName" "Array" "byte[]"))
       (soap-namespace-put
        (make-soap-xs-basic-type :name type
@@ -462,7 +466,7 @@ This is a specialization of `soap-encode-value' for
 
     (when (or value (eq kind 'boolean))
       (case kind
-        ((string anyURI QName)
+        ((string anyURI QName ID IDREF)
          (unless (stringp value)
            (error "Not a string value: %s" value))
          (insert (url-insert-entities-in-string value)))
@@ -482,10 +486,11 @@ This is a specialization of `soap-encode-value' for
            (error "Not a boolean value")
            (insert (if value "true" "false"))))
 
-        ((long int integer byte unsignedInt)
+        ((long short int integer byte 
+               unsignedInt unsignedLong unsignedShort decimal duration)
          (unless (integerp value)
            (error "Not an integer value"))
-         (when (and (eq kind 'unsignedInt) (< value 0))
+         (when (and (memq kind '(unsignedInt unsignedLong unsignedShort)) (< value 0))
            (error "Not a positive integer"))
          (insert (number-to-string value)))
 
@@ -516,9 +521,11 @@ This is a specialization of `soap-decode-type' for
     (if (null contents)
         nil
         (ecase kind
-          ((string anyURI QName) (car contents))
+          ((string anyURI QName ID IDREF) (car contents))
           (dateTime (car contents))     ; TODO: convert to a date time
-          ((long int integer unsignedInt byte float double)
+          ((long short int integer 
+                 unsignedInt unsignedLong unsignedShort 
+                 decimal byte float double duration)
            (string-to-number (car contents)))
           (boolean (string= (downcase (car contents)) "true"))
           (base64Binary (base64-decode-string (car contents)))

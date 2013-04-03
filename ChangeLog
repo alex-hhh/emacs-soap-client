@@ -4,6 +4,9 @@
 	referenced type can be eiher a simple type or a basic type
 	(soap-xs-add-restriction)
 	(soap-xs-parse-extension-or-restriction): use `soap-l2fq' on base
+	(soap-make-xs-basic-types)
+	(soap-encode-xs-basic-type, soap-decode-xs-basic-type): add
+	support for more XMLSchema basic types
 
 	* soap-client.el (soap-l2wk): bugfix: call symbolp instead of
 	symbol-name
