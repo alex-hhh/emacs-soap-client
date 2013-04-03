@@ -95,6 +95,15 @@ are fully qualified for a different namespace.  This is a
 dynamically bound variable, controlled by
 `soap-with-local-xmlns'")
 
+(defvar soap-current-file nil
+  "The current file name while parsing a WSDL document.
+This value is only valid while a WSDL is loaded")
+
+(defvar soap-xmlschema-imports nil
+  "A list of additional XSD schema files to load.
+This is filled from <xsd:import> statememts while parsing a WSDL
+document.  Only valid while a WSDL document is loaded.")
+
 (defun soap-wk2l (well-known-name)
   "Return local variant of WELL-KNOWN-NAME.
 This is done by looking up the namespace in the
@@ -1237,6 +1246,12 @@ Return a SOAP-NAMESPACE containing the elements."
       (dolist (def (xml-node-children node))
         (unless (stringp def)           ; skip text nodes
           (case (soap-l2wk (xml-node-name def))
+            (xsd:import
+             ;; Imports will be processed later
+             ;; NOTE: we should expand the location now!
+             (let ((location (xml-get-attribute-or-nil def 'schemaLocation)))
+               (when location
+                 (push location soap-xmlschema-imports))))
             (xsd:element
              (soap-namespace-put (soap-xs-parse-element def) ns))
             (xsd:attribute
@@ -1286,16 +1301,41 @@ Return a SOAP-NAMESPACE containing the elements."
 ;;;;; The WSDL document
 
 ;; The WSDL data structure used for encoding/decoding SOAP messages
-(defstruct soap-wsdl
+(defstruct (soap-wsdl
+             ;; NOTE: don't call this constructor, see `soap-make-wsdl'
+             (:constructor soap-make-wsdl^)
+             (:copier soap-copy-wsdl))
   origin                         ; file or URL from which this wsdl was loaded
   ports                          ; a list of SOAP-PORT instances
   alias-table                    ; a list of namespace aliases
   namespaces                     ; a list of namespaces
   )
 
+(defun soap-make-wsdl (origin)
+  "Create a new WSDL document and intialize it."
+  (let ((wsdl (soap-make-wsdl^ :origin origin)))
+
+    ;; Add the XSD types to the wsdl document
+    (let ((ns (soap-make-xs-basic-types "http://www.w3.org/2001/XMLSchema")))
+      (soap-wsdl-add-namespace ns wsdl)
+      (soap-wsdl-add-alias "xsd" (soap-namespace-name ns) wsdl))
+
+    ;; Add the soapenc types to the wsdl document
+    (let ((ns (soap-make-xs-basic-types "http://schemas.xmlsoap.org/soap/encoding/")))
+      (soap-wsdl-add-namespace ns wsdl)
+      (soap-wsdl-add-alias "soapenc" (soap-namespace-name ns) wsdl))
+
+    wsdl))
+
 (defun soap-wsdl-add-alias (alias name wsdl)
   "Add a namespace ALIAS for NAME to the WSDL document."
-  (push (cons alias name) (soap-wsdl-alias-table wsdl)))
+  (let ((existing (assoc alias (soap-wsdl-alias-table wsdl))))
+    (if existing
+        (unless (equal (cdr existing) name)
+          (warn "Redefining alias %s from %s to %s"
+                alias (cdr existing) name)
+          (push (cons alias name) (soap-wsdl-alias-table wsdl)))
+        (push (cons alias name) (soap-wsdl-alias-table wsdl)))))
 
 (defun soap-wsdl-find-namespace (name wsdl)
   "Find a namespace by NAME in the WSDL document."
@@ -1553,10 +1593,11 @@ traverse an element tree."
 
 ;;;;; Loading WSDL from XML documents
 
-(defun soap-load-wsdl-from-url (url)
-  "Load a WSDL document from URL and return it.
-The returned WSDL document needs to be used for `soap-invoke'
-calls."
+(defun soap-fetch-xml-from-url (url)
+  "Load an XML document from URL and return it."
+  (message "Fetching from %s" url)
+  (setq url (url-expand-file-name url soap-current-file))
+  (setq soap-current-file url)
   (let ((url-request-method "GET")
         (url-package-name "soap-client.el")
         (url-package-version "1.0")
@@ -1575,23 +1616,42 @@ calls."
             (error "Server response is not an XML document"))
           (with-temp-buffer
             (mm-insert-part mime-part)
-            (let ((wsdl-xml (car (xml-parse-region (point-min) (point-max)))))
-              (prog1
-                  (let ((wsdl (soap-parse-wsdl wsdl-xml)))
-                    (setf (soap-wsdl-origin wsdl) url)
-                    wsdl)
-                (kill-buffer buffer)))))))))
+            (prog1
+                (car (xml-parse-region (point-min) (point-max)))
+              (kill-buffer buffer))))))))
 
-(defun soap-load-wsdl (file)
-  "Load a WSDL document from FILE and return it."
+(defun soap-fetch-xml-from-file (file)
+  "Load an XML document from FILE and return it."
+  (setq file (expand-file-name file 
+                               (if soap-current-file
+                                   (file-name-directory soap-current-file)
+                                   default-directory)))
+  (setq soap-current-file file)
   (with-temp-buffer
     (insert-file-contents file)
-    (let ((xml (car (xml-parse-region (point-min) (point-max)))))
-      (let ((wsdl (soap-parse-wsdl xml)))
-        (setf (soap-wsdl-origin wsdl) file)
-        wsdl))))
+    (car (xml-parse-region (point-min) (point-max)))))
 
-(defun soap-parse-wsdl (node)
+(defun soap-fetch-xml (file-or-url)
+  "Load an XML document from FILE-OR-URL and return it."
+  (if (or (and soap-current-file (file-exists-p soap-current-file))
+          (file-exists-p file-or-url))
+      (soap-fetch-xml-from-file file-or-url)
+      (soap-fetch-xml-from-url file-or-url)))
+
+(defun soap-load-wsdl (file-or-url &optional wsdl)
+  "Load a WSDL document from FILE-OR-URL and return it."
+  (unless wsdl 
+    (setq soap-current-file nil
+          soap-xmlschema-imports nil))
+  (let ((xml (soap-fetch-xml file-or-url))
+        (wsdl (or wsdl (soap-make-wsdl file-or-url))))
+    (soap-wsdl-resolve-references 
+     (soap-parse-wsdl xml wsdl))
+    wsdl))
+
+(defalias 'soap-load-wsdl-from-url 'soap-load-wsdl)
+
+(defun soap-parse-wsdl (node wsdl)
   "Construct a WSDL structure from NODE, which is an XML document."
   (soap-with-local-xmlns node
 
@@ -1600,66 +1660,63 @@ calls."
             "expecting wsdl:definitions node, got %s"
             (soap-l2wk (xml-node-name node)))
 
-    (let ((wsdl (make-soap-wsdl)))
+    ;; Add the local alias table to the wsdl document -- it will be used for
+    ;; all types in this document even after we finish parsing it.
+    ;; (dolist (alias soap-local-xmlns)
+    ;;   (soap-wsdl-add-alias (car alias) (cdr alias) wsdl))
 
-      ;; Add the local alias table to the wsdl document -- it will be used for
-      ;; all types in this document even after we finish parsing it.
-      (setf (soap-wsdl-alias-table wsdl) soap-local-xmlns)
+    (dolist (node (soap-xml-get-children1 node 'wsdl:import))
+      (let ((location (xml-get-attribute-or-nil node 'location)))
+        (when location
+          (soap-load-wsdl location wsdl))))
 
-      ;; Add the XSD types to the wsdl document
-      (let ((ns (soap-make-xs-basic-types "http://www.w3.org/2001/XMLSchema")))
-        (soap-wsdl-add-namespace ns wsdl)
-        (soap-wsdl-add-alias "xsd" (soap-namespace-name ns) wsdl))
+    ;; Find all the 'xsd:schema nodes which are children of wsdl:types nodes
+    ;; and build our type-library
 
-      ;; Add the soapenc types to the wsdl document
-      (let ((ns (soap-make-xs-basic-types "http://schemas.xmlsoap.org/soap/encoding/")))
-        (soap-wsdl-add-namespace ns wsdl)
-        (soap-wsdl-add-alias "soapenc" (soap-namespace-name ns) wsdl))
+    (let ((types (car (soap-xml-get-children1 node 'wsdl:types))))
+      (dolist (node (xml-node-children types))
+        ;; We cannot use (xml-get-children node (soap-wk2l 'xsd:schema))
+        ;; because each node can install its own alias type so the schema
+        ;; nodes might have a different prefix.
+        (when (consp node)
+          (soap-with-local-xmlns node
+            (when (eq (soap-l2wk (xml-node-name node)) 'xsd:schema)
+              (soap-wsdl-add-namespace (soap-parse-schema node) wsdl))))))
 
-      ;; Find all the 'xsd:schema nodes which are children of wsdl:types nodes
-      ;; and build our type-library
+    (while soap-xmlschema-imports
+      (let ((import (pop soap-xmlschema-imports)))
+        (let ((xml (soap-fetch-xml import)))
+              (soap-wsdl-add-namespace (soap-parse-schema xml) wsdl))))
 
-      (let ((types (car (soap-xml-get-children1 node 'wsdl:types))))
-        (dolist (node (xml-node-children types))
-          ;; We cannot use (xml-get-children node (soap-wk2l 'xsd:schema))
-          ;; because each node can install its own alias type so the schema
-          ;; nodes might have a different prefix.
-          (when (consp node)
-            (soap-with-local-xmlns node
-              (when (eq (soap-l2wk (xml-node-name node)) 'xsd:schema)
-                (soap-wsdl-add-namespace (soap-parse-schema node) wsdl))))))
+    (let ((ns (make-soap-namespace :name (soap-get-target-namespace node))))
+      (dolist (node (soap-xml-get-children1 node 'wsdl:message))
+        (soap-namespace-put (soap-parse-message node) ns))
 
-      (let ((ns (make-soap-namespace :name (soap-get-target-namespace node))))
-        (dolist (node (soap-xml-get-children1 node 'wsdl:message))
-          (soap-namespace-put (soap-parse-message node) ns))
+      (dolist (node (soap-xml-get-children1 node 'wsdl:portType))
+        (let ((port-type (soap-parse-port-type node)))
+          (soap-namespace-put port-type ns)
+          (soap-wsdl-add-namespace
+           (soap-port-type-operations port-type) wsdl)))
 
-        (dolist (node (soap-xml-get-children1 node 'wsdl:portType))
-          (let ((port-type (soap-parse-port-type node)))
-            (soap-namespace-put port-type ns)
-            (soap-wsdl-add-namespace
-             (soap-port-type-operations port-type) wsdl)))
+      (dolist (node (soap-xml-get-children1 node 'wsdl:binding))
+        (soap-namespace-put (soap-parse-binding node) ns))
 
-        (dolist (node (soap-xml-get-children1 node 'wsdl:binding))
-          (soap-namespace-put (soap-parse-binding node) ns))
+      (dolist (node (soap-xml-get-children1 node 'wsdl:service))
+        (dolist (node (soap-xml-get-children1 node 'wsdl:port))
+          (let ((name (xml-get-attribute node 'name))
+                (binding (xml-get-attribute node 'binding))
+                (url (let ((n (car (soap-xml-get-children1
+                                    node 'wsdlsoap:address))))
+                       (xml-get-attribute n 'location))))
+            (let ((port (make-soap-port
+                         :name name :binding (soap-l2fq binding 'tns)
+                         :service-url url)))
+              (soap-namespace-put port ns)
+              (push port (soap-wsdl-ports wsdl))))))
 
-        (dolist (node (soap-xml-get-children1 node 'wsdl:service))
-          (dolist (node (soap-xml-get-children1 node 'wsdl:port))
-            (let ((name (xml-get-attribute node 'name))
-                  (binding (xml-get-attribute node 'binding))
-                  (url (let ((n (car (soap-xml-get-children1
-                                      node 'wsdlsoap:address))))
-                         (xml-get-attribute n 'location))))
-              (let ((port (make-soap-port
-                           :name name :binding (soap-l2fq binding 'tns)
-                           :service-url url)))
-                (soap-namespace-put port ns)
-                (push port (soap-wsdl-ports wsdl))))))
+      (soap-wsdl-add-namespace ns wsdl))
 
-        (soap-wsdl-add-namespace ns wsdl))
-
-      (soap-wsdl-resolve-references wsdl)
-
-      wsdl)))
+    wsdl))
 
 
 (defun soap-parse-message (node)
