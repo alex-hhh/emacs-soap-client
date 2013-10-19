@@ -1603,7 +1603,7 @@ traverse an element tree."
         (url-package-version "1.0")
         (url-mime-charset-string "utf-8;q=1, iso-8859-1;q=0.5")
         (url-request-coding-system 'utf-8)
-        (url-http-attempt-keepalives nil))
+        (url-http-attempt-keepalives t))
     (let ((buffer (url-retrieve-synchronously url)))
       (with-current-buffer buffer
         (declare (special url-http-response-status))
