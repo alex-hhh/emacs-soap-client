@@ -1,8 +1,44 @@
+2013-04-03  Alex Harsanyi  <AlexHarsanyi@gmail.com>
+
+	* soap-client.el (soap-resolve-references-for-xs-attribute):
+	referenced type can be eiher a simple type or a basic type
+	(soap-xs-add-restriction)
+	(soap-xs-parse-extension-or-restriction): use `soap-l2fq' on base
+	(soap-make-xs-basic-types)
+	(soap-encode-xs-basic-type, soap-decode-xs-basic-type): add
+	support for more XMLSchema basic types
+	(soap-current-file, soap-xmlschema-imports): new defvars
+	(soap-parse-schema): add locations from xsd:import tags to
+	`soap-xmlschema-imports'
+	(soap-wsdl): make destructor private
+	(soap-make-wsdl): new defun, SOAP-WSDL object constructor
+	(soap-wsdl-add-alias): check if we try to replace aliases
+	(soap-fetch-xml-from-url, soap-fetch-xml-from-file)
+	(soap-fetch-xml): new defuns
+	(soap-load-wsdl): updated to load the WSDL from either a file or
+	an url
+	(soap-load-wsdl-from-url): now an alias to `soap-load-wsdl'
+	(soap-parse-wsdl): process wsdl:import tags and imports from
+	`soap-xmlschema-imports'
+
+	* soap-client.el (soap-l2wk): bugfix: call symbolp instead of
+	symbol-name
+	(soap-l2fq): make the name part always a string
+	(soap-name-p): new defun, used for name tests
+
+2012-12-19  Alex Harsanyi  <AlexHarsanyi@gmail.com>
+
+	* soap-inspect.el (soap-sample-value-for-xs-complex-type): supply
+	sample values for choice types with a special tag
+
+	* soap-client.el (soap-encode-xs-complex-type): handle anonymous
+	elements correctly
+	(soap-encode-value): accept nodes that have no namespace tag
+
 2013-01-29  Alex Harsanyi  <AlexHarsanyi@gmail.com>
 
 	* soap-client.el (soap-invoke): encode the string for
 	`url-request-data' as UTF-8. Fixes issue 16
-
 2011-12-30  Alex Harsanyi  <AlexHarsanyi@gmail.com>
 
 	* soap-client.el (soap-resolve-references-for-sequence-type)
