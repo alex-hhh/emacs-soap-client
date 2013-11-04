@@ -74,10 +74,12 @@
     ("soap" . "http://schemas.xmlsoap.org/soap/envelope/")
     ("soap12" . "http://schemas.xmlsoap.org/wsdl/soap12/")
     ("http" . "http://schemas.xmlsoap.org/wsdl/http/")
-    ("mime" . "http://schemas.xmlsoap.org/wsdl/mime/"))
+    ("mime" . "http://schemas.xmlsoap.org/wsdl/mime/")
+    ("xml" . "http://www.w3.org/XML/1998/namespace"))
   "A list of well known xml namespaces and their aliases.")
 
-(defvar soap-local-xmlns nil
+(defvar soap-local-xmlns 
+  '(("xml" . "http://www.w3.org/XML/1998/namespace"))
   "A list of local namespace aliases.
 This is a dynamically bound variable, controlled by
 `soap-with-local-xmlns'.")
@@ -266,10 +268,13 @@ namespace tag."
     (nreverse result)))
 
 (defun soap-xml-node-first-child (node)
-  "Return the first non-text child of NODE."
+  ;; TODO: this is not a good function, all its users should use a different
+  ;; approach...
+  "Return the first non-text and non annotation child of NODE."
   (catch 'found
     (dolist (child (xml-node-children node))
-      (when (consp child)
+      (when (and (consp child)
+                 (not (eq 'xsd:annotation (soap-l2wk (xml-node-name child)))))
         (throw 'found child)))))
 
 (defun soap-xml-get-attribute-or-nil1 (node attribute)
@@ -408,8 +413,9 @@ binding) but the same name."
   "Construct NAMESPACE-NAME containing the XMLSchema basic types.
 An optional NAMESPACE-TAG can also be specified."
   (let ((ns (make-soap-namespace :name namespace-name)))
-    (dolist (type '("string" "ID" "IDREF" "dateTime" "boolean"
-                    "long" "short" "int" "integer" 
+    (dolist (type '("string" "language" "ID" "IDREF" 
+                    "dateTime" "time" "date" "boolean"
+                    "long" "short" "int" "integer" "nonNegativeInteger"
                     "unsignedLong" "unsignedShort" "unsignedInt" 
                     "decimal" "duration"
                     "byte" "unsignedByte"
@@ -475,11 +481,12 @@ This is a specialization of `soap-encode-value' for
 
     (when (or value (eq kind 'boolean))
       (case kind
-        ((string anyURI QName ID IDREF)
+        ((string anyURI QName ID IDREF language)
          (unless (stringp value)
            (error "Not a string value: %s" value))
          (insert (url-insert-entities-in-string value)))
-        (dateTime
+        ((dateTime time date)
+         ;; TODO: are time and date encoded the same way?
          (cond ((and (consp value) ; is there a time-value-p ?
                      (>= (length value) 2)
                      (numberp (nth 0 value))
@@ -489,17 +496,19 @@ This is a specialization of `soap-encode-value' for
                ((stringp value)
                 (insert (url-insert-entities-in-string value)))
                (t
-                (error "Not a dateTime value"))))
+                (error "Not a dateTime, date or time value"))))
         (boolean
          (unless (memq value '(t nil))
            (error "Not a boolean value")
            (insert (if value "true" "false"))))
 
-        ((long short int integer byte 
-               unsignedInt unsignedLong unsignedShort decimal duration)
+        ((long short int integer byte unsignedInt unsignedLong
+               unsignedShort nonNegativeInteger decimal duration)
          (unless (integerp value)
            (error "Not an integer value"))
-         (when (and (memq kind '(unsignedInt unsignedLong unsignedShort)) (< value 0))
+         (when (and (memq kind '(unsignedInt unsignedLong 
+                                 unsignedShort nonNegativeInteger))
+                    (< value 0))
            (error "Not a positive integer"))
          (insert (number-to-string value)))
 
@@ -530,10 +539,10 @@ This is a specialization of `soap-decode-type' for
     (if (null contents)
         nil
         (ecase kind
-          ((string anyURI QName ID IDREF) (car contents))
-          (dateTime (car contents))     ; TODO: convert to a date time
+          ((string anyURI QName ID IDREF language) (car contents))
+          ((dateTime time date) (car contents)) ; TODO: convert to a date time
           ((long short int integer 
-                 unsignedInt unsignedLong unsignedShort 
+                 unsignedInt unsignedLong unsignedShort nonNegativeInteger
                  decimal byte float double duration)
            (string-to-number (car contents)))
           (boolean (string= (downcase (car contents)) "true"))
@@ -621,8 +630,12 @@ See also `soap-wsdl-resolve-references'."
            ;; an inline defined type, this will not be reached from anywhere
            ;; else, so we must resolve references now.
            (soap-resolve-references type wsdl))
-          (t
-           (error "Unknown type for element: %s" type))))
+
+          ;; TODO: It is OK not to have a type? (it might have a reference...)
+          
+          ;; (t (error "Unknown type for element: %s" type))
+
+          ))
   (let ((reference (soap-xs-element-reference element)))
     (when (soap-name-p reference)
       (setf (soap-xs-element-reference element)
@@ -751,10 +764,12 @@ See also `soap-wsdl-resolve-references'."
 
     (let ((type (make-soap-xs-simple-type :name name :id id))
           (def (soap-xml-node-first-child node)))
-      (case (soap-l2wk (xml-node-name def))
+      (ecase (soap-l2wk (xml-node-name def))
         (xsd:restriction (soap-xs-add-restriction def type))
         (xsd:extension (soap-xs-add-extension def type))
-        (xsd:union (soap-xs-add-union def type)))
+        (xsd:union (soap-xs-add-union def type))
+        (xsd:list nil))                 ; TODO: add support for this
+      
       type)))
 
 (defun soap-xs-add-restriction (node type)
@@ -828,8 +843,9 @@ See also `soap-wsdl-resolve-references'."
           "expecting xsd:union node, got %s" (soap-l2wk (xml-node-name node)))
 
   (setf (soap-xs-simple-type-base type)
-        (split-string
-         (or (xml-get-attribute-or-nil node 'memberTypes) "")))
+        (mapcar 'soap-l2fq 
+                (split-string
+                 (or (xml-get-attribute-or-nil node 'memberTypes) ""))))
 
   ;; Additional simple types can be defined inside the union node.  Add them
   ;; to the base list.  The "memberTypes" members will have to be resolved by
@@ -840,7 +856,7 @@ See also `soap-wsdl-resolve-references'."
 
 (defun soap-xs-add-extension (node type)
   "Add the extended type defined in XML NODE to TYPE, an `soap-xs-simple-type'."
-  (setf (soap-xs-simple-type-base type) (xml-get-attribute node 'base))
+  (setf (soap-xs-simple-type-base type) (soap-l2fq (xml-get-attribute node 'base)))
   (dolist (attribute (soap-xml-get-children1 node 'xsd:attribute))
     (push (soap-xs-parse-attribute attribute)
           (soap-xs-type-attributes type))))
@@ -897,8 +913,10 @@ This is a specialization of `soap-resolve-references' for
 
 See also `soap-wsdl-resolve-references'."
   (let ((base (soap-xs-simple-type-base type)))
-    (cond ((not base)
-           (error "Simple type %s has no base" (soap-xs-type-name type)))
+    (cond 
+           ;; TODO: It is OK not to have a base?
+           ;; ((not base)
+           ;; (error "Simple type %s has no base" (soap-xs-type-name type)))
           ((soap-name-p base)
            (setf (soap-xs-simple-type-base type)
                  (soap-wsdl-get base wsdl 'soap-xs-type-p)))
@@ -908,7 +926,7 @@ See also `soap-wsdl-resolve-references'."
            (setf (soap-xs-simple-type-base type)
                  (mapcar (lambda (type)
                            (cond ((soap-name-p type)
-                                  (soap-wsdl-get base wsdl 'soap-xs-type-p))
+                                  (soap-wsdl-get type wsdl 'soap-xs-type-p))
                                  ((soap-xs-type-p type)
                                   (soap-resolve-references type wsdl)
                                   type)

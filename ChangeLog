@@ -1,3 +1,22 @@
+2013-11-04  Alex Harsanyi  <AlexHarsanyi@gmail.com>
+
+	* soap-client.el (soap-well-known-xmlns): add the xml namespace
+	(soap-local-xmlns): start with the xml namespace
+	(soap-xml-node-first-child): skip xsd:annotation nodes too
+	(soap-make-xs-basic-types): more xsd types added
+	(soap-encode-xs-basic-type, soap-decode-xs-basic-type): handle
+	"language", "time", "date", "nonNegativeInteger"
+	(soap-resolve-references-for-xs-element): don't signal an error if
+	the element does not have a type.
+	(soap-xs-parse-simple-type): subtypes are handled with ecase,
+	added stum for xsd:list
+	(soap-xs-add-union): call soap-l2fq on all union members
+	(soap-xs-add-extension): call soap-l2fq on the base member
+	(soap-resolve-references-for-xs-simple-type): don't signal an
+	error if the simple type has no base.
+	(soap-resolve-references-for-xs-simple-type): bugfix, call
+	soap-wsdl-get on each type of the base
+
 2013-04-03  Alex Harsanyi  <AlexHarsanyi@gmail.com>
 
 	* soap-client.el (soap-resolve-references-for-xs-attribute):
