@@ -656,16 +656,18 @@ position.
 
 This is a specialization of `soap-encode-value' for
 `soap-xs-basic-type' objects."
-  (let ((name (soap-xs-element-name element))
+  (let ((fq-name (soap-element-fq-name element))
         (type (soap-xs-element-type element)))
-    (if name
+    ;; Only encode the element if it has a name.  NOTE: soap-element-fq-name
+    ;; will return *unnamed* for such elements
+    (if (soap-element-name element)     
         (progn
-          (insert "<" name)
+          (insert "<" fq-name)
           (soap-encode-attributes value type)
           (if value
               (progn (insert ">")
                      (soap-encode-value value type)
-                     (insert "</" name ">\n"))
+                     (insert "</" fq-name ">\n"))
               ;; else
               (insert "/>\n")))
         (if value
@@ -692,6 +694,7 @@ This is a specialization of `soap-decode-type' for
 
 (defstruct (soap-xs-attribute (:include soap-element))
   type                                  ; a simple type or basic type
+  default                               ; the default value, if any
   reference)
 
 (defun soap-xs-parse-attribute (node)
@@ -700,11 +703,12 @@ This is a specialization of `soap-decode-type' for
           "expecting xsd:attribute, got %s" (soap-l2wk (xml-node-name node)))
   (let ((name (xml-get-attribute-or-nil node 'name))
         (type (soap-l2fq (xml-get-attribute-or-nil node 'type)))
+        (default (xml-get-attribute-or-nil node 'fixed))
         (ref (soap-l2fq (xml-get-attribute-or-nil node 'ref))))
     (unless (or type ref)
       (setq type (soap-xs-parse-simple-type
                   (soap-xml-node-first-child node))))
-    (make-soap-xs-attribute :name name :type type :reference ref)))
+    (make-soap-xs-attribute :name name :type type :default default :reference ref)))
 
 (defun soap-resolve-references-for-xs-attribute (attribute wsdl)
   "Replace names in ATTRIBUTE with the referenced objects in the WSDL.
@@ -1128,8 +1132,17 @@ This is a specialization of `soap-encode-attributes' for
                 "[" (format "%s" (length value)) "]" "\""))
       ;; else
       (progn
-        (insert " xsi:type=\"" (soap-element-fq-name type) "\"")
-        (unless value (insert " xsi:nil=\"true\"")))))
+        (when (soap-element-name type)
+          (insert " xsi:type=\"" (soap-element-fq-name type) "\""))
+        (dolist (a (soap-xs-type-attributes type))
+          ;; TODO: encode custom attributes, for now we just encode the
+          ;; default
+          (when (soap-xs-attribute-default a)
+            (insert " " (soap-element-name a) 
+                    "=\"" (soap-xs-attribute-default a) "\"")))
+        ;; If this is not an empty type, and we have no value, mark it as nil
+        (when (and (soap-xs-complex-type-indicator type) (null value))
+          (insert " xsi:nil=\"true\"")))))
 
 (defun soap-encode-xs-complex-type (value type)
   "Encode the VALUE according to TYPE.
@@ -2146,18 +2159,19 @@ document."
                (value (cdr (assoc param-name param-table)))
                (start-pos (point)))
           (soap-encode-value value element)
-          (when (eq use 'literal)
-            ;; hack: add the xmlns attribute to the tag, the only way
-            ;; ASP.NET web services recognize the namespace of the
-            ;; element itself...
-            (save-excursion
-              (goto-char start-pos)
-              (when (re-search-forward " ")
-                (let* ((ns (soap-element-namespace-tag element))
-                       (namespace (cdr (assoc ns
-                                              (soap-wsdl-alias-table wsdl)))))
-                  (when namespace
-                    (insert "xmlns=\"" namespace "\" ")))))))))
+          ;; (when (eq use 'literal)
+          ;;   ;; hack: add the xmlns attribute to the tag, the only way
+          ;;   ;; ASP.NET web services recognize the namespace of the
+          ;;   ;; element itself...
+          ;;   (save-excursion
+          ;;     (goto-char start-pos)
+          ;;     (when (re-search-forward " ")
+          ;;       (let* ((ns (soap-element-namespace-tag element))
+          ;;              (namespace (cdr (assoc ns
+          ;;                                     (soap-wsdl-alias-table wsdl)))))
+          ;;         (when namespace
+          ;;           (insert "xmlns=\"" namespace "\" "))))))
+          )))
 
     (when (eq use 'encoded)
       (insert "</" (soap-element-fq-name op) ">\n"))
