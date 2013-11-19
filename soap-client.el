@@ -1316,6 +1316,8 @@ Return a SOAP-NAMESPACE containing the elements."
 (defstruct soap-bound-operation
   operation                             ; SOAP-OPERATION
   soap-action                           ; value for SOAPAction HTTP header
+  soap-headers                          ; list of (message part use)
+  soap-body                             ;  message parts present in the body
   use                                   ; 'literal or 'encoded, see
                                         ; http://www.w3.org/TR/wsdl#_soap:body
   )
@@ -1557,7 +1559,14 @@ See also `soap-resolve-references' and
   (let ((port-ops (soap-port-type-operations (soap-binding-port-type binding))))
     (maphash (lambda (k v)
                (setf (soap-bound-operation-operation v)
-                     (soap-namespace-get k port-ops 'soap-operation-p)))
+                     (soap-namespace-get k port-ops 'soap-operation-p))
+               (let (resolved-headers)
+                 (dolist (h (soap-bound-operation-soap-headers v))
+                   (push (list (soap-wsdl-get (nth 0 h) wsdl) 
+                               (intern (nth 1 h))
+                               (nth 2 h))
+                         resolved-headers))
+                 (setf (soap-bound-operation-soap-headers v) (nreverse resolved-headers))))
              (soap-binding-operations binding))))
 
 (defun soap-resolve-references-for-port (port wsdl)
@@ -1859,6 +1868,8 @@ traverse an element tree."
       (dolist (wo (soap-xml-get-children1 node 'wsdl:operation))
         (let ((name (xml-get-attribute wo 'name))
               soap-action
+              soap-headers
+              soap-body
               use)
           (dolist (so (soap-xml-get-children1 wo 'wsdlsoap:operation))
             (setq soap-action (xml-get-attribute-or-nil so 'soapAction)))
@@ -1869,9 +1880,21 @@ traverse an element tree."
           ;; "use"-s for each of them...
 
           (dolist (i (soap-xml-get-children1 wo 'wsdl:input))
-            (dolist (b (soap-xml-get-children1 i 'wsdlsoap:body))
-              (setq use (or use
-                            (xml-get-attribute-or-nil b 'use)))))
+
+            ;; There can be multiple headers ...
+            (dolist (h (soap-xml-get-children1 i 'wsdlsoap:header))
+              (let ((message (soap-l2fq (xml-get-attribute-or-nil h 'message)))
+                    (part (xml-get-attribute-or-nil h 'part))
+                    (use (xml-get-attribute-or-nil h 'use)))
+                (when (and message part)
+                  (push (list message part use) soap-headers))))
+
+            ;; ... but only one body
+            (let ((body (car (soap-xml-get-children1 i 'wsdlsoap:body))))
+              (setq soap-body (xml-get-attribute-or-nil body 'parts))
+              (when soap-body
+                (setq soap-body (mapcar #'intern (split-string soap-body nil 'omit-nulls))))
+              (setq use (xml-get-attribute-or-nil body 'use))))
 
           (unless use
             (dolist (i (soap-xml-get-children1 wo 'wsdl:output))
@@ -1879,9 +1902,12 @@ traverse an element tree."
                 (setq use (or use
                               (xml-get-attribute-or-nil b 'use))))))
 
-          (puthash name (make-soap-bound-operation :operation name
-                                                   :soap-action soap-action
-                                                   :use (and use (intern use)))
+          (puthash name (make-soap-bound-operation 
+                         :operation name
+                         :soap-action soap-action
+                         :soap-headers (nreverse soap-headers)
+                         :soap-body soap-body
+                         :use (and use (intern use)))
                    (soap-binding-operations binding))))
       binding)))
 
@@ -2145,6 +2171,27 @@ document."
              (length parameter-order)
              (length parameters)))
 
+    ;; TODO: the header values are part of the parameter order, but not used
+    ;; in any way. We should find a way to supply parameters to the headers or
+    ;; remove the requirement to pass nil for these arguments.
+
+    (let ((headers (soap-bound-operation-soap-headers operation)))
+      (when headers
+        (insert "<soap:Header>\n")
+        (dolist (h headers)
+          (let* ((message (nth 0 h))
+                 (part (assq (nth 1 h) (soap-message-parts message)))
+                 (use (nth 2 h))
+                 (element (cdr part))
+                 (ns (soap-element-namespace-tag element)))
+            (when (eq use 'encoded)
+              (add-to-list 'soap-encoded-namespaces (soap-element-namespace-tag element))
+              (insert "<" (soap-element-fq-name element) ">\n"))
+            (soap-encode-value nil element)
+            (when (eq use 'encoded)
+              (insert "</" (soap-element-fq-name element) ">\n"))))
+        (insert "</soap:Header>\n")))
+
     (insert "<soap:Body>\n")
     (when (eq use 'encoded)
       (add-to-list 'soap-encoded-namespaces (soap-element-namespace-tag op))
@@ -2158,7 +2205,9 @@ document."
                (element (cdr part))
                (value (cdr (assoc param-name param-table)))
                (start-pos (point)))
-          (soap-encode-value value element)
+          (when (or (null (soap-bound-operation-soap-body operation))
+                    (member param-name (soap-bound-operation-soap-body operation)))
+            (soap-encode-value value element))
           ;; (when (eq use 'literal)
           ;;   ;; hack: add the xmlns attribute to the tag, the only way
           ;;   ;; ASP.NET web services recognize the namespace of the
