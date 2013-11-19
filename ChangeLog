@@ -1,3 +1,10 @@
+2013-11-17  Alex Harsanyi  <AlexHarsanyi@gmail.com>
+
+	* soap-client.el (soap-bound-operation): new slot `soap-body`
+	(soap-parse-binding): parse the message parts required in the body
+	(soap-encode-body): encode only the parts that are declared to be
+	part of the body
+
 2013-11-15  Alex Harsanyi  <AlexHarsanyi@gmail.com>
 
 	* soap-client.el (soap-encode-xs-element): use the fq name when
