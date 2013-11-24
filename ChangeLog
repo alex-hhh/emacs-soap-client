@@ -1,3 +1,11 @@
+2013-11-25  Alex Harsanyi  <AlexHarsanyi@gmail.com>
+
+	Make debbugs tests pass
+
+	* soap-client.el (soap-decode-any-type): use soap-l2fq on the type
+	name, also skip string only nodes when decoding a structure.
+
+
 2013-11-23  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
 
 	* soap-client.el (soap-should-encode-value-for-xs-element): new

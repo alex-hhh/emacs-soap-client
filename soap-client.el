@@ -2002,8 +2002,10 @@ decode function to perform the actual decoding."
   "Decode NODE using type information inside it."
   ;; If the NODE has type information, we use that...
   (let ((type (soap-xml-get-attribute-or-nil1 node 'xsi:type)))
+    (when type
+      (setq type (soap-l2fq type)))
     (if type
-        (let ((wtype (soap-wsdl-get type soap-current-wsdl 'soap-xs-type-p)))
+      (let ((wtype (soap-wsdl-get type soap-current-wsdl 'soap-xs-type-p)))
           (if wtype
               (soap-decode-type wtype node)
               ;; The node has type info encoded in it, but we don't know how
@@ -2021,9 +2023,11 @@ decode function to perform the actual decoding."
               ;; structure name
               (let (result)
                 (dolist (element contents)
-                  (let ((key (xml-node-name element))
+                  ;; skip any string contents, assume they are whitespace
+                  (unless (stringp element)
+                    (let ((key (xml-node-name element))
                         (value (soap-decode-any-type element)))
-                    (push (cons key value) result)))
+                      (push (cons key value) result))))
                 (nreverse result)))))))
 
 (defun soap-decode-array (node)
