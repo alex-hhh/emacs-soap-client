@@ -649,6 +649,36 @@ This is a specialization of `soap-encode-attributes' for
 `soap-xs-basic-type' objects."
   nil)
 
+(defun soap-should-encode-value-for-xs-element (value element)
+  ""
+  (cond 
+    ;; if value is not nil, attempt to encode it
+    (value)                      
+
+    ;; value is nil, but the element's type is a boolean, so nil in this case
+    ;; means "false".  We need to encode it.
+    ((let ((type (soap-xs-element-type element)))
+       (and (soap-xs-basic-type-p type)
+            (eq (soap-xs-basic-type-kind type) 'boolean))))
+
+    ;; This is not an optional element.  Force encoding it (although this
+    ;; might fail at the validation step, but this is what we intend.
+    
+    ;; TODO: The follwing check fails on ews, leave it out for now
+    ;; ((not (soap-xs-element-optional? element)))
+     
+    ;; value is nil, but the element's type has some attributes which supply a
+    ;; default value.  We need to encode it.
+
+    ((let ((type (soap-xs-element-type element)))
+       (catch 'found
+         (dolist (a (soap-xs-type-attributes type))
+           (when (soap-xs-attribute-default a)
+             (throw 'found t))))))
+
+    ;; otherwise, we don't need to encode it
+    (t nil)))
+
 (defun soap-encode-xs-element (value element)
   "Encode the VALUE according to ELEMENT.
 The data is inserted in the current buffer at the current
@@ -660,18 +690,22 @@ This is a specialization of `soap-encode-value' for
         (type (soap-xs-element-type element)))
     ;; Only encode the element if it has a name.  NOTE: soap-element-fq-name
     ;; will return *unnamed* for such elements
-    (if (soap-element-name element)     
-        (progn
-          (insert "<" fq-name)
-          (soap-encode-attributes value type)
-          (if value
-              (progn (insert ">")
-                     (soap-encode-value value type)
-                     (insert "</" fq-name ">\n"))
+    (if (soap-element-name element)
+        ;; Don't encode this element if value is nil.  However, even if value
+        ;; is nil we still want to encode this element if it has any attributes
+        ;; with default values.
+        (when (soap-should-encode-value-for-xs-element value element)
+          (progn
+            (insert "<" fq-name)
+            (soap-encode-attributes value type)
+            (if value
+                (progn (insert ">")
+                       (soap-encode-value value type)
+                       (insert "</" fq-name ">\n"))
               ;; else
-              (insert "/>\n")))
-        (if value
-            (soap-encode-value value type)))))
+              (insert "/>\n"))))
+        (when (soap-should-encode-value-for-xs-element value element)
+          (soap-encode-value value type)))))
 
 (defun soap-decode-xs-element (element node)
   "Use ELEMENT, a `soap-xs-element', to decode the contents of NODE.
