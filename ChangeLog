@@ -7,7 +7,9 @@
 
 	* soap-client.el (soap-decode-any-type): use soap-l2fq on the type
 	name, also skip string only nodes when decoding a structure.
-
+	(soap-xs-parse-complex-type): (BUG) dispatch parsing for choice
+	types too
+	(soap-encode-body): grab the header value from the param table
 
 2013-11-23  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
 
