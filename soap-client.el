@@ -1034,7 +1034,7 @@ This is a specialization of `soap-decode-type' for
         (case (soap-l2wk (xml-node-name def))
           (xsd:attribute (push (soap-xs-parse-attribute def) attributes))
           (xsd:simpleContent (setq type (soap-xs-parse-simple-type def)))
-          ((xsd:sequence xsd:all) (setq type (soap-xs-parse-sequence def)))
+          ((xsd:sequence xsd:all xsd:choice) (setq type (soap-xs-parse-sequence def)))
           (xsd:complexContent
            (dolist (def (xml-node-children def))
              (when (consp def)
@@ -2201,7 +2201,10 @@ document."
   (let* ((op (soap-bound-operation-operation operation))
          (use (soap-bound-operation-use operation))
          (message (cdr (soap-operation-input op)))
-         (parameter-order (soap-operation-parameter-order op)))
+         (parameter-order (soap-operation-parameter-order op))
+         (param-table (loop for formal in parameter-order
+                            for value in parameters
+                            collect (cons formal value))))
 
     (unless (= (length parameter-order) (length parameters))
       (error "Wrong number of parameters for %s: expected %d, got %s"
@@ -2219,13 +2222,14 @@ document."
         (dolist (h headers)
           (let* ((message (nth 0 h))
                  (part (assq (nth 1 h) (soap-message-parts message)))
+                 (value (cdr (assoc (car part) param-table)))
                  (use (nth 2 h))
                  (element (cdr part))
                  (ns (soap-element-namespace-tag element)))
             (when (eq use 'encoded)
               (add-to-list 'soap-encoded-namespaces (soap-element-namespace-tag element))
               (insert "<" (soap-element-fq-name element) ">\n"))
-            (soap-encode-value nil element)
+            (soap-encode-value value element)
             (when (eq use 'encoded)
               (insert "</" (soap-element-fq-name element) ">\n"))))
         (insert "</soap:Header>\n")))
@@ -2235,30 +2239,14 @@ document."
       (add-to-list 'soap-encoded-namespaces (soap-element-namespace-tag op))
       (insert "<" (soap-element-fq-name op) ">\n"))
 
-    (let ((param-table (loop for formal in parameter-order
-                          for value in parameters
-                          collect (cons formal value))))
-      (dolist (part (soap-message-parts message))
-        (let* ((param-name (car part))
-               (element (cdr part))
-               (value (cdr (assoc param-name param-table)))
-               (start-pos (point)))
-          (when (or (null (soap-bound-operation-soap-body operation))
-                    (member param-name (soap-bound-operation-soap-body operation)))
-            (soap-encode-value value element))
-          ;; (when (eq use 'literal)
-          ;;   ;; hack: add the xmlns attribute to the tag, the only way
-          ;;   ;; ASP.NET web services recognize the namespace of the
-          ;;   ;; element itself...
-          ;;   (save-excursion
-          ;;     (goto-char start-pos)
-          ;;     (when (re-search-forward " ")
-          ;;       (let* ((ns (soap-element-namespace-tag element))
-          ;;              (namespace (cdr (assoc ns
-          ;;                                     (soap-wsdl-alias-table wsdl)))))
-          ;;         (when namespace
-          ;;           (insert "xmlns=\"" namespace "\" "))))))
-          )))
+    (dolist (part (soap-message-parts message))
+      (let* ((param-name (car part))
+             (element (cdr part))
+             (value (cdr (assoc param-name param-table)))
+             (start-pos (point)))
+        (when (or (null (soap-bound-operation-soap-body operation))
+                  (member param-name (soap-bound-operation-soap-body operation)))
+          (soap-encode-value value element))))
 
     (when (eq use 'encoded)
       (insert "</" (soap-element-fq-name op) ">\n"))
