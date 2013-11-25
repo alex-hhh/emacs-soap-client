@@ -462,7 +462,7 @@ TYPE is a `soap-xs-complex-type'"
   (put (aref (make-soap-port) 0) 'soap-inspect
        'soap-inspect-port)
 
-  (put (aref (make-soap-wsdl) 0) 'soap-inspect
+  (put (aref (soap-make-wsdl "origin") 0) 'soap-inspect
        'soap-inspect-wsdl))
 
 (provide 'soap-inspect)
