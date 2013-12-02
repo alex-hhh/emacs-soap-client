@@ -611,7 +611,12 @@ contains a reference, we retrive the type of the reference."
                   ;; else
                   (error "Soap-xs-parse-element: node is missing type or ref"))))))
 
-    (make-soap-xs-element :name name :id id :type^ type
+    (make-soap-xs-element :name name 
+                          ;; Use the full namespace name for now, we will
+                          ;; convert it to a nstag in
+                          ;; `soap-resolve-references-for-xs-element'
+                          :namespace-tag soap-target-xmlns
+                          :id id :type^ type
                           :optional? optional? :multiple? multiple?
                           :reference ref
                           :substitution-group substitution-group)))
@@ -622,6 +627,13 @@ This is a specialization of `soap-resolve-references' for
 `soap-xs-element' objects.
 
 See also `soap-wsdl-resolve-references'."
+
+  (let ((namespace (soap-element-namespace-tag element)))
+    (when namespace
+      (let ((nstag (car (rassoc namespace (soap-wsdl-alias-table wsdl)))))
+        (when nstag
+          (setf (soap-element-namespace-tag element) nstag)))))
+
   (let ((type (soap-xs-element-type^ element)))
     (cond ((soap-name-p type)
            (setf (soap-xs-element-type^ element)
@@ -800,7 +812,8 @@ See also `soap-wsdl-resolve-references'."
   (let ((name (xml-get-attribute-or-nil node 'name))
         (id (xml-get-attribute-or-nil node 'id)))
 
-    (let ((type (make-soap-xs-simple-type :name name :id id))
+    (let ((type (make-soap-xs-simple-type 
+                 :name name :namespace-tag soap-target-xmlns :id id))
           (def (soap-xml-node-first-child node)))
       (ecase (soap-l2wk (xml-node-name def))
         (xsd:restriction (soap-xs-add-restriction def type))
@@ -950,6 +963,13 @@ This is a specialization of `soap-resolve-references' for
 `soap-xs-simple-type' objects.
 
 See also `soap-wsdl-resolve-references'."
+
+  (let ((namespace (soap-element-namespace-tag type)))
+    (when namespace
+      (let ((nstag (car (rassoc namespace (soap-wsdl-alias-table wsdl)))))
+        (when nstag
+          (setf (soap-element-namespace-tag type) nstag)))))
+
   (let ((base (soap-xs-simple-type-base type)))
     (cond 
            ;; TODO: It is OK not to have a base?
@@ -1051,6 +1071,7 @@ This is a specialization of `soap-decode-type' for
       (setq type (make-soap-xs-complex-type)))
 
     (setf (soap-xs-type-name type) name)
+    (setf (soap-xs-type-namespace-tag type) soap-target-xmlns)
     (setf (soap-xs-type-id type) id)
     (setf (soap-xs-type-attributes type)
           (append attributes (soap-xs-type-attributes type)))
@@ -1140,6 +1161,13 @@ This is a specialization of `soap-resolve-references' for
 `soap-xs-complex-type' objects.
 
 See also `soap-wsdl-resolve-references'."
+
+  (let ((namespace (soap-element-namespace-tag type)))
+    (when namespace
+      (let ((nstag (car (rassoc namespace (soap-wsdl-alias-table wsdl)))))
+        (when nstag
+          (setf (soap-element-namespace-tag type) nstag)))))
+
   (let ((base (soap-xs-complex-type-base type)))
     (cond ((soap-name-p base)
            (setf (soap-xs-complex-type-base type)
@@ -1383,12 +1411,12 @@ Return a SOAP-NAMESPACE containing the elements."
   (let ((wsdl (soap-make-wsdl^ :origin origin)))
 
     ;; Add the XSD types to the wsdl document
-    (let ((ns (soap-make-xs-basic-types "http://www.w3.org/2001/XMLSchema")))
+    (let ((ns (soap-make-xs-basic-types "http://www.w3.org/2001/XMLSchema" "xsd")))
       (soap-wsdl-add-namespace ns wsdl)
       (soap-wsdl-add-alias "xsd" (soap-namespace-name ns) wsdl))
 
     ;; Add the soapenc types to the wsdl document
-    (let ((ns (soap-make-xs-basic-types "http://schemas.xmlsoap.org/soap/encoding/")))
+    (let ((ns (soap-make-xs-basic-types "http://schemas.xmlsoap.org/soap/encoding/" "soapenc")))
       (soap-wsdl-add-namespace ns wsdl)
       (soap-wsdl-add-alias "soapenc" (soap-namespace-name ns) wsdl))
 
@@ -1532,6 +1560,13 @@ See also `soap-wsdl-resolve-references'."
   "Resolve references for an OPERATION type using the WSDL document.
 See also `soap-resolve-references' and
 `soap-wsdl-resolve-references'"
+
+  (let ((namespace (soap-element-namespace-tag operation)))
+    (when namespace
+      (let ((nstag (car (rassoc namespace (soap-wsdl-alias-table wsdl)))))
+        (when nstag
+          (setf (soap-element-namespace-tag operation) nstag)))))
+
   (let ((input (soap-operation-input operation))
         (counter 0))
     (let ((name (car input))
@@ -1654,13 +1689,11 @@ traverse an element tree."
         (maphash (lambda (name element)
                    (cond ((soap-element-p element) ; skip links
                           (incf nprocessed)
-                          (soap-resolve-references element wsdl)
-                          (setf (soap-element-namespace-tag element) nstag))
+                          (soap-resolve-references element wsdl))
                          ((listp element)
                           (dolist (e element)
                             (when (soap-element-p e)
                               (incf nprocessed)
-                              (setf (soap-element-namespace-tag e) nstag)
                               (soap-resolve-references e wsdl))))))
                  (soap-namespace-elements ns)))))
     wsdl)
@@ -1812,7 +1845,10 @@ traverse an element tree."
         (if element
             (setq element (soap-l2fq element 'tns))
             ;; else
-            (setq element (make-soap-xs-element :name name :type^ type)))
+            (setq element (make-soap-xs-element 
+                           :name name 
+                           :namespace-tag soap-target-xmlns
+                           :type^ type)))
 
         (push (cons name element) parts)))
     (make-soap-message :name name :parts (nreverse parts))))
@@ -1823,8 +1859,8 @@ traverse an element tree."
           nil
           "expecting wsdl:portType node got %s"
           (soap-l2wk (xml-node-name node)))
-  (let ((ns (make-soap-namespace
-             :name (concat "urn:" (xml-get-attribute node 'name)))))
+  (let* ((soap-target-xmlns (concat "urn:" (xml-get-attribute node 'name)))
+         (ns (make-soap-namespace :name soap-target-xmlns)))
     (dolist (node (soap-xml-get-children1 node 'wsdl:operation))
       (let ((o (soap-parse-operation node)))
 
@@ -1884,6 +1920,7 @@ traverse an element tree."
                (push (cons name (soap-l2fq message 'tns)) faults)))))))
     (make-soap-operation
      :name name
+     :namespace-tag soap-target-xmlns
      :parameter-order parameter-order
      :input input
      :output output
@@ -2227,7 +2264,8 @@ document."
                  (element (cdr part))
                  (ns (soap-element-namespace-tag element)))
             (when (eq use 'encoded)
-              (add-to-list 'soap-encoded-namespaces (soap-element-namespace-tag element))
+              (when (soap-element-namespace-tag element)
+                (add-to-list 'soap-encoded-namespaces (soap-element-namespace-tag element)))
               (insert "<" (soap-element-fq-name element) ">\n"))
             (soap-encode-value value element)
             (when (eq use 'encoded)
@@ -2236,7 +2274,8 @@ document."
 
     (insert "<soap:Body>\n")
     (when (eq use 'encoded)
-      (add-to-list 'soap-encoded-namespaces (soap-element-namespace-tag op))
+      (when (soap-element-namespace-tag op)
+        (add-to-list 'soap-encoded-namespaces (soap-element-namespace-tag op)))
       (insert "<" (soap-element-fq-name op) ">\n"))
 
     (dolist (part (soap-message-parts message))
