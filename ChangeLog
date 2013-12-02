@@ -1,3 +1,24 @@
+2013-12-02  Alex Harsanyi  <AlexHarsanyi@gmail.com>
+
+	* soap-client.el (soap-xs-parse-element)
+	(soap-xs-parse-simple-type) 
+	(soap-xs-parse-complex-type)
+	(soap-parse-message)
+	(soap-parse-operation): add the current namespace to the element
+	being created
+	(soap-resolve-references-for-xs-element)
+	(soap-resolve-references-for-xs-simple-type)
+	(soap-resolve-references-for-xs-complex-type)
+	(soap-resolve-references-for-operation): resolve the namespace to
+	the namespace tag
+	(soap-make-wsdl): specify a namespace tag when creating the xsd
+	and soapenc namespaces
+	(soap-wsdl-resolve-references): don't update namespace tags in
+	elements here
+	(soap-parse-port-type): bind the urn: to soap-target-xmlns
+	(soap-encode-body): don't add nil namespace tags to
+	soap-encoded-namespaces
+
 2013-11-25  Alex Harsanyi  <AlexHarsanyi@gmail.com>
 
 	* soap-inspect.el: use `soap-make-wsdl` to construct the object
