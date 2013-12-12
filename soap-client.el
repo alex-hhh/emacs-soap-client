@@ -955,7 +955,9 @@ See also `soap-wsdl-resolve-references'."
         (unless (<= value (cdr integer-range))
           (error
          "Xs-simple-type(%s, %s): big value, should be at most %s"
-         value (soap-element-fq-name type) (cdr integer-range)))))))
+         value (soap-element-fq-name type) (cdr integer-range))))))
+  ;; Return the validated value.
+  value)
 
 (defun soap-resolve-references-for-xs-simple-type (type wsdl)
   "Replace names in TYPE with the referenced objects in the WSDL.
