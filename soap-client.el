@@ -1314,6 +1314,7 @@ This is a specialization of `soap-decode-type' for
                     (soap-warning "While decoding %s: multiple slots named %s"
                                   (soap-xs-element-name element) e-name))))))
        (nreverse result)))
+    ((nil) nil)
     (t
      (error "Don't know how to decode complex type: %s"
             (soap-xs-complex-type-indicator type)))))
@@ -2108,7 +2109,8 @@ WSDL is used to decode the NODE"
             nil
             "expecting soap:Envelope node, got %s"
             (soap-l2wk (xml-node-name node)))
-    (let ((body (car (soap-xml-get-children1 node 'soap:Body))))
+    (let ((headers (soap-xml-get-children1 node 'soap:Header))
+          (body (car (soap-xml-get-children1 node 'soap:Body))))
 
       (let ((fault (car (soap-xml-get-children1 body 'soap:Fault))))
         (when fault
@@ -2133,12 +2135,15 @@ WSDL is used to decode the NODE"
                             (dolist (n (xml-node-children body))
                               (when (consp n)
                                 (throw 'found n)))))))
-        (soap-parse-response response operation wsdl body)))))
+        (soap-parse-response response operation wsdl headers body)))))
 
-(defun soap-parse-response (response-node operation wsdl soap-body)
+(defun soap-parse-response (response-node operation wsdl soap-headers soap-body)
   "Parse RESPONSE-NODE and return the result as a LISP value.
 OPERATION is the WSDL operation for which we expect the response,
 WSDL is used to decode the NODE.
+
+SOAP-HEADERS is a list of the headers of the SOAP envelope or nil
+if there are no headers.
 
 SOAP-BODY is the body of the SOAP envelope (of which
 RESPONSE-NODE is a sub-node).  It is used in case RESPONSE-NODE
@@ -2180,7 +2185,11 @@ reference multiRef parts which are external to RESPONSE-NODE."
                                              (soap-element-namespace-tag type)
                                              ns-aliases)))
                               (fqname (cons ns-name (soap-element-name type))))
-                         (dolist (c (xml-node-children response-node))
+                         (dolist (c (append (mapcar (lambda (header)
+                                                      (car (xml-node-children
+                                                            header)))
+                                                    headers)
+                                            (xml-node-children response-node)))
                            (when (consp c)
                              (soap-with-local-xmlns c
                                (when (equal (soap-l2fq (xml-node-name c))
@@ -2190,7 +2199,9 @@ reference multiRef parts which are external to RESPONSE-NODE."
             (unless node
               (error "Soap-parse-response(%s): cannot find message part %s"
                      (soap-element-name op) tag))
-            (push (soap-decode-type type node) decoded-parts)))
+	    (let ((decoded-value (soap-decode-type type node)))
+	      (when decoded-value
+		(push decoded-value decoded-parts)))))
 
         decoded-parts))))
 

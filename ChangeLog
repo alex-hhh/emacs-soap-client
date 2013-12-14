@@ -1,3 +1,11 @@
+2013-12-13  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
+	* soap-client.el (soap-decode-xs-complex-type): Handle nil type
+	indicator.
+	(soap-parse-envelope): Handle response headers.
+	(soap-parse-response): Likewise.  Only return non-nil decoded
+	values.
+
 2013-12-12  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
 
 	* soap-client.el (soap-validate-xs-simple-type): Return validated
