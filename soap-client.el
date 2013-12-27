@@ -1,4 +1,4 @@
-;;;; soap-client.el -- Access SOAP web services from Emacs
+;;;; soap-client.el -- Access SOAP web services from Emacs -*- lexical-binding: t -*-
 ;; Copyright (C) 2009-2011  Free Software Foundation, Inc.
 
 ;; Author: Alexandru Harsanyi <AlexHarsanyi@gmail.com>
@@ -46,6 +46,7 @@
 (require 'url)
 (require 'url-http)
 (require 'url-util)
+(require 'url-vars)
 (require 'mm-decode)
 
 (defsubst soap-warning (message &rest args)
@@ -336,11 +337,8 @@ discriminant predicate to `soap-namespace-get'"
   (let ((name (soap-element-name element)))
     (push element (gethash name (soap-namespace-elements ns)))))
 
-(defun soap-namespace-put-link (name target ns &optional replace)
+(defun soap-namespace-put-link (name target ns)
   "Store a link from NAME to TARGET in NS.
-An error will be signaled if an element by the same name is
-already present in NS, unless REPLACE is non nil.
-
 TARGET can be either a SOAP-ELEMENT or a string denoting an
 element name into another namespace.
 
@@ -653,7 +651,7 @@ See also `soap-wsdl-resolve-references'."
       (setf (soap-xs-element-reference element)
             (soap-wsdl-get reference wsdl 'soap-xs-element-p)))))
 
-(defun soap-encode-xs-element-attributes (value element)
+(defun soap-encode-xs-element-attributes (_value _element)
   "Encode the XML attributes for VALUE according to ELEMENT.
 Currently no attributes are needed.
 
@@ -1449,7 +1447,7 @@ elements will be added to it."
   (let ((existing (soap-wsdl-find-namespace (soap-namespace-name ns) wsdl)))
     (if existing
         ;; Add elements from NS to EXISTING, replacing existing values.
-        (maphash (lambda (key value)
+        (maphash (lambda (_key value)
                    (dolist (v value)
                      (soap-namespace-put v existing)))
                  (soap-namespace-elements ns))
@@ -1689,7 +1687,7 @@ traverse an element tree."
                 (soap-wsdl-add-alias nstag (soap-namespace-name ns) wsdl)
                 (throw 'done t)))))
 
-        (maphash (lambda (name element)
+        (maphash (lambda (_name element)
                    (cond ((soap-element-p element) ; skip links
                           (incf nprocessed)
                           (soap-resolve-references element wsdl))
@@ -1712,7 +1710,6 @@ traverse an element tree."
         (url-package-name "soap-client.el")
         (url-package-version "1.0")
         (url-mime-charset-string "utf-8;q=1, iso-8859-1;q=0.5")
-        (url-request-coding-system 'utf-8)
         (url-http-attempt-keepalives t))
     (let ((buffer (url-retrieve-synchronously url)))
       (with-current-buffer buffer
@@ -1888,7 +1885,7 @@ traverse an element tree."
 
                 (dolist (fault (soap-operation-faults o))
                   (destructuring-bind (name . message) fault
-                    (soap-namespace-put-link name message ns 'replace)))
+                    (soap-namespace-put-link name message ns)))
 
                 )))))
 
@@ -2188,7 +2185,7 @@ reference multiRef parts which are external to RESPONSE-NODE."
                          (dolist (c (append (mapcar (lambda (header)
                                                       (car (xml-node-children
                                                             header)))
-                                                    headers)
+                                                    soap-headers)
                                             (xml-node-children response-node)))
                            (when (consp c)
                              (soap-with-local-xmlns c
@@ -2242,7 +2239,7 @@ work."
   (when (soap-element-namespace-tag type)
     (add-to-list 'soap-encoded-namespaces (soap-element-namespace-tag type))))
 
-(defun soap-encode-body (operation parameters wsdl)
+(defun soap-encode-body (operation parameters _wsdl)
   "Create the body of a SOAP request for OPERATION in the current buffer.
 PARAMETERS is a list of parameters supplied to the OPERATION.
 
@@ -2274,8 +2271,7 @@ document."
                  (part (assq (nth 1 h) (soap-message-parts message)))
                  (value (cdr (assoc (car part) param-table)))
                  (use (nth 2 h))
-                 (element (cdr part))
-                 (ns (soap-element-namespace-tag element)))
+                 (element (cdr part)))
             (when (eq use 'encoded)
               (when (soap-element-namespace-tag element)
                 (add-to-list 'soap-encoded-namespaces (soap-element-namespace-tag element)))
@@ -2294,8 +2290,7 @@ document."
     (dolist (part (soap-message-parts message))
       (let* ((param-name (car part))
              (element (cdr part))
-             (value (cdr (assoc param-name param-table)))
-             (start-pos (point)))
+             (value (cdr (assoc param-name param-table))))
         (when (or (null (soap-bound-operation-soap-body operation))
                   (member param-name (soap-bound-operation-soap-body operation)))
           (soap-encode-value value element))))
@@ -2380,7 +2375,6 @@ operations in a WSDL document."
               (soap-create-envelope operation parameters wsdl)
               'utf-8))
             (url-mime-charset-string "utf-8;q=1, iso-8859-1;q=0.5")
-            (url-request-coding-system 'utf-8)
             (url-http-attempt-keepalives t)
             (url-request-extra-headers (list
                                         (cons "SOAPAction"
