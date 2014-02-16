@@ -1194,8 +1194,6 @@ This is a specialization of `soap-encode-attributes' for
                 "[" (format "%s" (length value)) "]" "\""))
       ;; else
       (progn
-        (when (soap-element-name type)
-          (insert " xsi:type=\"" (soap-element-fq-name type) "\""))
         (dolist (a (soap-xs-type-attributes type))
           ;; TODO: encode custom attributes, for now we just encode the
           ;; default
