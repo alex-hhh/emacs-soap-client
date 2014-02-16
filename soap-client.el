@@ -1153,6 +1153,7 @@ Return a `soap-xs-complex-type'."
         (setf (soap-xs-complex-type-indicator type) 'array)))
 
     (setf (soap-xs-complex-type-base type) (soap-l2fq base))
+    (setf (soap-xs-complex-type-attributes type) attributes)
     type))
 
 (defun soap-resolve-references-for-xs-complex-type (type wsdl)
@@ -1195,11 +1196,14 @@ This is a specialization of `soap-encode-attributes' for
       ;; else
       (progn
         (dolist (a (soap-xs-type-attributes type))
-          ;; TODO: encode custom attributes, for now we just encode the
-          ;; default
-          (when (soap-xs-attribute-default a)
-            (insert " " (soap-element-name a) 
-                    "=\"" (soap-xs-attribute-default a) "\"")))
+          (let ((element-name (soap-element-name a)))
+            (if (soap-xs-attribute-default a)
+                (insert " " element-name
+                        "=\"" (soap-xs-attribute-default a) "\"")
+              (dolist (value-pair value)
+                (when (equal element-name (symbol-name (car value-pair)))
+                  (insert " " element-name
+                          "=\"" (cdr value-pair) "\""))))))
         ;; If this is not an empty type, and we have no value, mark it as nil
         (when (and (soap-xs-complex-type-indicator type) (null value))
           (insert " xsi:nil=\"true\"")))))

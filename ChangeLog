@@ -1,5 +1,12 @@
 2014-02-04  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
 
+	* soap-client.el (soap-xs-parse-extension-or-restriction): Store
+	parsed attributes.
+	(soap-encode-xs-complex-type-attributes): Encode custom
+	attributes.
+
+2014-02-04  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
 	* soap-client.el (soap-encode-xs-complex-type-attributes): don't
 	add the xsi:type attribute (Exchange refuses requests which have
 	this attribute)
