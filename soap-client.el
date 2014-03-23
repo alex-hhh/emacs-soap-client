@@ -575,6 +575,17 @@ contains a reference, we retrive the type of the reference."
       (soap-xs-element-type (soap-xs-element-reference element))
       (soap-xs-element-type^ element)))
 
+(defun soap-node-optional (node)
+  "Return t if NODE specifies an optional element."
+  (or (equal (xml-get-attribute-or-nil node 'nillable) "true")
+      (let ((e (xml-get-attribute-or-nil node 'minOccurs)))
+        (and e (equal e "0")))))
+
+(defun soap-node-multiple (node)
+  "Return t if NODE allows multiple elements."
+  (let* ((e (xml-get-attribute-or-nil node 'maxOccurs)))
+    (and e (not (equal e "1")))))
+
 (defun soap-xs-parse-element (node)
   "Construct a `soap-xs-element' from NODE."
   (assert (eq (soap-l2wk (xml-node-name node)) 'xsd:element)
@@ -582,11 +593,8 @@ contains a reference, we retrive the type of the reference."
   (let ((name (xml-get-attribute-or-nil node 'name))
         (id (xml-get-attribute-or-nil node 'id))
         (type (xml-get-attribute-or-nil node 'type))
-        (optional? (or (equal (xml-get-attribute-or-nil node 'nillable) "true")
-                       (let ((e (xml-get-attribute-or-nil node 'minOccurs)))
-                         (and e (equal e "0")))))
-        (multiple? (let ((e (xml-get-attribute-or-nil node 'maxOccurs)))
-                     (and e (not (equal e "1")))))
+        (optional? (soap-node-optional node))
+        (multiple? (soap-node-multiple node))
         (ref (xml-get-attribute-or-nil node 'ref))
         (substitution-group (xml-get-attribute-or-nil node 'substitutionGroup)))
 
@@ -1036,7 +1044,9 @@ This is a specialization of `soap-decode-type' for
 (defstruct (soap-xs-complex-type (:include soap-xs-type))
   indicator                             ; sequence, choice, all, array
   base
-  elements)
+  elements
+  optional?
+  multiple?)
 
 (defun soap-xs-parse-complex-type (node)
   "Construct a `soap-xs-complex-type' by parsing the XML NODE."
@@ -1093,6 +1103,9 @@ Returns a `soap-xs-complex-type'"
             (xsd:sequence 'sequence)
             (xsd:all 'all)
             (xsd:choice 'choice)))
+
+    (setf (soap-xs-complex-type-optional? type) (soap-node-optional node))
+    (setf (soap-xs-complex-type-multiple? type) (soap-node-multiple node))
 
     (dolist (r (xml-node-children node))
       (unless (stringp r)                 ; skip the white space
@@ -1270,6 +1283,87 @@ This is a specialization of `soap-encode-value' for
      (error "Don't know how to encode complex type: %s"
             (soap-xs-complex-type-indicator type)))))
 
+(defun soap-xml-get-children-fq (node child-name)
+  "Return the children of NODE named CHILD-NAME. This is the same
+as `xml-get-children1', but NODE's local namespace is used to
+resolve the children's namespace tags."
+  (let (result)
+    (dolist (c (xml-node-children node))
+      (when (and (consp c)
+                 (soap-with-local-xmlns node
+                   ;; We use `ignore-errors' here because we want to silently
+                   ;; skip nodes for which we cannot convert them to a
+                   ;; well-known name.
+                   (equal (ignore-errors (soap-l2fq (xml-node-name c)))
+                          child-name)))
+        (push c result)))
+    (nreverse result)))
+
+(defun soap-xs-element-get-fq-name (element wsdl)
+  "Return ELEMENT's fully-qualified name using WSDL's alias
+table, or nil if ELEMENT does not have a name."
+  (let* ((ns-aliases (soap-wsdl-alias-table wsdl))
+         (ns-name (cdr (assoc
+                        (soap-element-namespace-tag element)
+                        ns-aliases))))
+    (when ns-name
+      (cons ns-name (soap-element-name element)))))
+
+(defun soap-xs-complex-type-optional-p (type)
+  "Return t if TYPE or any of TYPE's ancestor types is optional,
+nil otherwise."
+  (when type
+    (or (soap-xs-complex-type-optional? type)
+        (and (soap-xs-complex-type-p type)
+             (soap-xs-complex-type-optional-p
+              (soap-xs-complex-type-base type))))))
+
+(defun soap-xs-complex-type-multiple-p (type)
+  "Return t if TYPE or any of TYPE's ancestor types allows
+multiple elements, nil otherwise."
+  (when type
+    (or (soap-xs-complex-type-multiple? type)
+        (and (soap-xs-complex-type-p type)
+             (soap-xs-complex-type-multiple-p
+              (soap-xs-complex-type-base type))))))
+
+(defun soap-xs-attributes-consolidate (type)
+  "Return a list of all of TYPE's attributes and all of TYPE's
+ancestors' attributes."
+  (let* ((base (and (soap-xs-complex-type-p type)
+                    (soap-xs-complex-type-base type))))
+    (if base
+        (append (soap-xs-type-attributes type)
+                (soap-xs-attributes-consolidate base))
+      (soap-xs-type-attributes type))))
+
+(defun soap-decode-xs-attributes (type node)
+  "Use TYPE, a `soap-xs-complex-type', to decode the attributes
+of NODE."
+  (let (result)
+    (dolist (attribute (soap-xs-attributes-consolidate type))
+      (let* ((name (soap-xs-attribute-name attribute))
+             (fq-name (soap-xs-attribute-type attribute))
+             (symbol (intern name))
+             (value (xml-get-attribute-or-nil node symbol))
+             (attribute-type (soap-wsdl-get fq-name soap-current-wsdl)))
+        ;; We don't support attribute uses: required, optional, prohibited.
+        (cond
+         ((soap-xs-basic-type-p attribute-type)
+          ;; Basic type values are validated by xml.el.
+          (when value
+            (push (cons symbol value) result)))
+         ((soap-xs-simple-type-p attribute-type)
+          (when value
+            (push (cons symbol
+                        (soap-validate-xs-simple-type value attribute-type))
+                  result)))
+         (t
+          (error (concat "Attribute %s is of type %s which is"
+                         " not a basic or simple type")
+                 name (cdr fq-name))))))
+    result))
+
 (defun soap-decode-xs-complex-type (type node)
   "Use TYPE, a `soap-xs-complex-type', to decode the contents of NODE.
 A LISP value is returned based on the contents of NODE and the
@@ -1285,7 +1379,7 @@ This is a specialization of `soap-decode-type' for
          (when (consp node)
            (push (soap-decode-type element-type node) result)))
        (nreverse result)))
-    ((sequence choice all)
+    ((sequence choice all nil)
      (let ((result nil)
            (base (soap-xs-complex-type-base type)))
        (when base
@@ -1293,12 +1387,73 @@ This is a specialization of `soap-decode-type' for
        (catch 'done
          (dolist (element (soap-xs-complex-type-elements type))
            (let* ((instance-count 0)
-                  (e-name (intern (soap-xs-element-name element)))
-                  (children (if e-name (xml-get-children node e-name) (list node))))
+                  (e-name (soap-xs-element-name element))
+                  ;; Heuristic: guess if we need to decode using local
+                  ;; namespaces.
+                  (use-fq-names (string-match ":" (symbol-name (car node))))
+                  (children (if e-name
+                                (if use-fq-names
+                                    ;; Find relevant children using local
+                                    ;; namespaces by searching for the element's
+                                    ;; full-qualified name.
+                                    (soap-xml-get-children-fq
+                                     node
+                                     (soap-xs-element-get-fq-name
+                                      element soap-current-wsdl))
+                                  ;; No local namespace resolution needed so use
+                                  ;; the element's name unqualified.
+                                  (xml-get-children node (intern e-name)))
+                              ;; e-name is nil so a) we don't know which
+                              ;; children to operate on, and b) we want to
+                              ;; re-use soap-decode-xs-complex-type, which
+                              ;; expects a node argument with a complex type;
+                              ;; therefore we need to operate on the entire
+                              ;; node.  We wrap node in a list so that it will
+                              ;; carry through as "node" in the loop below.
+                              ;;
+                              ;; For example:
+                              ;;
+                              ;; Element Type:
+                              ;; <xs:complexType name="A">
+                              ;;   <xs:sequence>
+                              ;;     <xs:element name="B" type="t:BType"/>
+                              ;;     <xs:choice>
+                              ;;       <xs:element name="C" type="xs:string"/>
+                              ;;       <xs:element name="D" type="t:DType"/>
+                              ;;     </xs:choice>
+                              ;;   </xs:sequence>
+                              ;; </xs:complexType>
+                              ;;
+                              ;; Node:
+                              ;; <t:A>
+                              ;;   <t:B tag="b"/>
+                              ;;   <t:C>1</C>
+                              ;; </t:A>
+                              ;;
+                              ;; soap-decode-type will be called below with:
+                              ;;
+                              ;; element =
+                              ;;     <xs:choice>
+                              ;;       <xs:element name="C" type="xs:string"/>
+                              ;;       <xs:element name="D" type="t:DType"/>
+                              ;;     </xs:choice>
+                              ;; node =
+                              ;;     <t:A>
+                              ;;       <t:B tag="b"/>
+                              ;;       <t:C>1</C>
+                              ;;     </t:A>
+                              (list node)))
+                  (element-type (soap-xs-element-type element)))
              (dolist (node children)
                (incf instance-count)
-               (push (cons e-name (soap-decode-type element node)) result))
-
+               (let* ((attributes (soap-decode-xs-attributes element-type node))
+                      (decoded-child (soap-decode-type element node)))
+                 (if e-name
+                     (push (cons (intern e-name)
+                                 (append attributes decoded-child)) result)
+                   ;; When e-name is nil we don't want to introduce an extra
+                   ;; level of nesting, so we splice the decoding into result.
+                   (push (car decoded-child) result))))
              (cond ((and (eq (soap-xs-complex-type-indicator type) 'choice)
                          (> instance-count 0))
                     ;; This was a choice node, and we decoded one value.
@@ -1306,15 +1461,19 @@ This is a specialization of `soap-decode-type' for
 
                    ;; Do some sanity checking
                    ((and (= instance-count 0)
-                         (not (soap-xs-element-optional? element)))
-                    (soap-warning "missing non-nillable slot %s while decoding %s"
-                                  (soap-xs-element-name element) e-name))
+                         (not (soap-xs-element-optional? element))
+                         (and (soap-xs-complex-type-p element-type)
+                              (not (soap-xs-complex-type-optional-p
+                                    element-type))))
+                    (soap-warning "missing non-nillable slot %s" e-name))
                    ((and (> instance-count 1)
-                         (not (soap-xs-element-multiple? element)))
-                    (soap-warning "While decoding %s: multiple slots named %s"
-                                  (soap-xs-element-name element) e-name))))))
+                         (not (soap-xs-element-multiple? element))
+                         (and (soap-xs-complex-type-p element-type)
+                              (not (soap-xs-complex-type-multiple-p
+                                    element-type))))
+                    (soap-warning "expected single %s slot, found multiple"
+                                  e-name))))))
        (nreverse result)))
-    ((nil) nil)
     (t
      (error "Don't know how to decode complex type: %s"
             (soap-xs-complex-type-indicator type)))))

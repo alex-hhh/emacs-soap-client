@@ -1,3 +1,21 @@
+2014-03-23  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
+	* soap-client.el (soap-node-optional): New function.
+	(soap-node-multiple): Likewise.
+	(soap-xs-parse-element): Call soap-node-optional and
+	soap-node-multiple.
+	(soap-xs-complex-type): Add optional? and multiple? slots.
+	(soap-xml-get-children-fq): New function.
+	(soap-xs-element-get-fq-name): Likewise.
+	(soap-xs-complex-type-optional-p): Likewise.
+	(soap-xs-complex-type-multiple-p): Likewise.
+	(soap-xs-attributes-consolidate): Likewise.
+	(soap-decode-xs-attributes): Likewise.
+	(soap-decode-xs-complex-type): Decode types with nil type
+	indicator.  Support children that use local namespaces.  Decode
+	attributes.  Add type considerations to optional? and multiple?
+	warnings.
+
 2014-02-04  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
 
 	* soap-client.el (soap-xs-parse-extension-or-restriction): Store
