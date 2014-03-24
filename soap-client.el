@@ -107,6 +107,10 @@ This value is only valid while a WSDL is loaded")
 This is filled from <xsd:import> statememts while parsing a WSDL
 document.  Only valid while a WSDL document is loaded.")
 
+(defvar soap-current-wsdl nil
+  "The current WSDL document used when decoding the SOAP response.
+This is a dynamically bound variable.")
+
 (defun soap-wk2l (well-known-name)
   "Return local variant of WELL-KNOWN-NAME.
 This is done by looking up the namespace in the
@@ -2154,10 +2158,6 @@ SOAP response.")
   "List of decoded multi-ref nodes in the current SOAP response.
 This is a dynamically bound variable used during decoding the
 SOAP response.")
-
-(defvar soap-current-wsdl nil
-  "The current WSDL document used when decoding the SOAP response.
-This is a dynamically bound variable.")
 
 (defun soap-decode-type (type node)
   "Use TYPE (an xsd type) to decode the contents of NODE.

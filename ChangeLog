@@ -1,3 +1,8 @@
+2014-03-24  Alex Harsanyi  <AlexHarsanyi@gmail.com>
+
+	* soap-client.el (soap-current-wsdl): moved declaration earlier in
+	the file to prevent compiler warning.
+
 2014-03-23  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
 
 	* soap-client.el (soap-node-optional): New function.
