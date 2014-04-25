@@ -1,4 +1,3 @@
-2014-03-24  Alex Harsanyi  <AlexHarsanyi@gmail.com>
 2014-04-20  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
 
 	* soap-client.el (soap-xs-element): Add alternatives slot.
@@ -10,6 +9,7 @@
 	elements.  Handle types with nil type indicator.  Fix warning
 	logic.
 
+2014-03-24  Alex Harsanyi  <AlexHarsanyi@gmail.com>
 
 	* soap-client.el (soap-current-wsdl): moved declaration earlier in
 	the file to prevent compiler warning.
