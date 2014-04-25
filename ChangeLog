@@ -1,4 +1,15 @@
 2014-03-24  Alex Harsanyi  <AlexHarsanyi@gmail.com>
+2014-04-20  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
+	* soap-client.el (soap-xs-element): Add alternatives slot.
+	(soap-xs-parse-element): Set substitution-group.
+	(soap-resolve-references-for-xs-element): Populate alternatives
+	slot.
+	(soap-get-candidate-elements): New function.
+	(soap-encode-xs-complex-type): Iterate through all candidate
+	elements.  Handle types with nil type indicator.  Fix warning
+	logic.
+
 
 	* soap-client.el (soap-current-wsdl): moved declaration earlier in
 	the file to prevent compiler warning.

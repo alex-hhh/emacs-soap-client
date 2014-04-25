@@ -569,7 +569,10 @@ This is a specialization of `soap-decode-type' for
   optional?
   multiple?
   reference
-  substitution-group)
+  substitution-group
+  ;; contains a list of elements who point to this one via their
+  ;; substitution-group slot
+  alternatives)
 
 (defun soap-xs-element-type (element)
   "Retrieve the type of ELEMENT.
@@ -607,6 +610,9 @@ contains a reference, we retrive the type of the reference."
 
     (when ref
       (setq ref (soap-l2fq ref 'tns)))
+
+    (when substitution-group
+      (setq substitution-group (soap-l2fq substitution-group 'tns)))
 
     (unless (or ref type)
       ;; no type specified and this is not a reference.  Must be a type
@@ -661,7 +667,14 @@ See also `soap-wsdl-resolve-references'."
   (let ((reference (soap-xs-element-reference element)))
     (when (soap-name-p reference)
       (setf (soap-xs-element-reference element)
-            (soap-wsdl-get reference wsdl 'soap-xs-element-p)))))
+            (soap-wsdl-get reference wsdl 'soap-xs-element-p))))
+
+  (let ((subst (soap-xs-element-substitution-group element)))
+    (when (soap-name-p subst)
+      (let ((target (soap-wsdl-get subst wsdl)))
+        (if target
+            (push element (soap-xs-element-alternatives target))
+          (soap-warning "No target found for substitution-group" subst))))))
 
 (defun soap-encode-xs-element-attributes (_value _element)
   "Encode the XML attributes for VALUE according to ELEMENT.
@@ -1225,6 +1238,19 @@ This is a specialization of `soap-encode-attributes' for
         (when (and (soap-xs-complex-type-indicator type) (null value))
           (insert " xsi:nil=\"true\"")))))
 
+(defun soap-get-candidate-elements (element)
+  "Return a list of elements that are compatible with ELEMENT,
+including ELEMENT's references and alternatives."
+  ;; Append the element itself and its alternatives.
+  (append (list element)
+          (soap-xs-element-alternatives element)
+          ;; If the element is a reference, append the reference and its
+          ;; alternatives.
+          (let ((reference (soap-xs-element-reference element)))
+            (when reference
+              (append (list reference)
+                      (soap-xs-element-alternatives reference))))))
+
 (defun soap-encode-xs-complex-type (value type)
   "Encode the VALUE according to TYPE.
 The data is inserted in the current buffer at the current
@@ -1241,7 +1267,7 @@ This is a specialization of `soap-encode-value' for
                (insert "<" tag ">")
                (soap-encode-value (aref value i) element-type)
                (insert "</" tag ">")))))
-    ((sequence choice all)
+    ((sequence choice all nil)
      (let ((type-list (list type)))
 
        ;; Collect all base types
@@ -1250,39 +1276,58 @@ This is a specialization of `soap-encode-value' for
            (push base type-list)
            (setq base (soap-xs-complex-type-base base))))
 
-       (catch 'done
-         (dolist (type type-list)
-           (dolist (element (soap-xs-complex-type-elements type))
+       (dolist (type type-list)
+         (dolist (element (soap-xs-complex-type-elements type))
+           (catch 'done
              (let ((instance-count 0)
                    (e-name (soap-xs-element-name element)))
-
-               (if e-name
-                   (progn
-                     (setq e-name (intern e-name))
-                     (dolist (v value)
-                       (when (equal (car v) e-name)
-                         (incf instance-count)
-                         (soap-encode-value (cdr v) element))))
-                   (progn
-                     (incf instance-count)
-                     (soap-encode-value value element)))
-               
+               (dolist (candidate (soap-get-candidate-elements element))
+                 (let ((e-name (soap-xs-element-name candidate)))
+                   (if e-name
+                       (let ((e-name (intern e-name)))
+                         (dolist (v value)
+                           (when (equal (car v) e-name)
+                             (incf instance-count)
+                             (soap-encode-value (cdr v) candidate))))
+                     (if (soap-xs-complex-type-indicator type)
+                         (let ((current-point (point)))
+                           ;; TODO: Maybe make soap-encode-value return t on
+                           ;; success, nil on failure.  For now, check if
+                           ;; encoding happened by checking if characters were
+                           ;; inserted in the buffer.
+                           (soap-encode-value value candidate)
+                           (when (not (equal current-point (point)))
+                               (incf instance-count)))
+                       (dolist (v value)
+                         (let ((current-point (point)))
+                           (soap-encode-value v candidate)
+                           (when (not (equal current-point (point)))
+                             (incf instance-count))))))))
                ;; Do some sanity checking
-               (cond ((and (eq (soap-xs-complex-type-indicator type) 'choice)
-                           (> instance-count 0))
-                      ;; This was a choice node and we encoded one instance
-                      (throw 'done t))
-                     ((and (not (eq (soap-xs-complex-type-indicator type) 'choice))
-                           (= instance-count 0)
-                           (not (soap-xs-element-optional? element)))
-                      (soap-warning
-                       "While encoding %s: missing non-nillable slot %s"
-                       (soap-xs-element-name element) e-name))
-                     ((and (> instance-count 1)
-                           (not (soap-xs-element-multiple? element)))
-                      (soap-warning
-                       "While encoding %s: multiple slots named %s"
-                       (soap-xs-element-name element) e-name)))))))))
+               (let ((indicator (soap-xs-complex-type-indicator type))
+                     (element-type (soap-xs-element-type element)))
+                 (cond ((and (eq indicator 'choice)
+                             (> instance-count 0))
+                        ;; This was a choice node and we encoded one instance
+                        (throw 'done t))
+                       ((and (not (eq indicator 'choice))
+                             (= instance-count 0)
+                             (not (soap-xs-element-optional? element))
+                             (and (soap-xs-complex-type-p element-type)
+                                  (not (soap-xs-complex-type-optional-p
+                                        element-type))))
+                        (soap-warning
+                         "While encoding %s: missing non-nillable slot %s"
+                         value element))
+                       ((and (> instance-count 1)
+                             (not (soap-xs-element-multiple? element))
+                             (and (soap-xs-complex-type-p element-type)
+                                  (not (soap-xs-complex-type-multiple-p
+                                        element-type))))
+                        (soap-warning
+                         (concat  "While encoding %s: expected single,"
+                                  " found multiple slots for element: %s")
+                         value element))))))))))
     (t
      (error "Don't know how to encode complex type: %s"
             (soap-xs-complex-type-indicator type)))))
