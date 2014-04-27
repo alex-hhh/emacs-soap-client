@@ -1509,7 +1509,9 @@ This is a specialization of `soap-decode-type' for
                     (throw 'done t))
 
                    ;; Do some sanity checking
-                   ((and (= instance-count 0)
+                   ((and (not (eq (soap-xs-complex-type-indicator type)
+                                  'choice))
+                         (= instance-count 0)
                          (not (soap-xs-element-optional? element))
                          (and (soap-xs-complex-type-p element-type)
                               (not (soap-xs-complex-type-optional-p

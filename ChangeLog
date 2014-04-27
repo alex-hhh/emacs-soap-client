@@ -1,5 +1,10 @@
 2014-04-26  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
 
+	* soap-client.el (soap-decode-xs-complex-type): Eliminate invalid
+	warnings for choice types.
+
+2014-04-26  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
 	* soap-client.el (soap-encode-xs-complex-type-attributes): Also
 	encode base type attributes.
 
