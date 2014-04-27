@@ -1,5 +1,10 @@
 2014-04-26  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
 
+	* soap-client.el (soap-encode-xs-complex-type-attributes): Also
+	encode base type attributes.
+
+2014-04-26  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
 	* soap-client.el (soap-encode-xs-complex-type): Fix compilation
 	warning.  Print e-name in warnings, or element if e-name is nil.
 
