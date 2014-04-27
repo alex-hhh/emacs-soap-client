@@ -1225,7 +1225,7 @@ This is a specialization of `soap-encode-attributes' for
                 "[" (format "%s" (length value)) "]" "\""))
       ;; else
       (progn
-        (dolist (a (soap-xs-type-attributes type))
+        (dolist (a (soap-xs-attributes-consolidate type))
           (let ((element-name (soap-element-name a)))
             (if (soap-xs-attribute-default a)
                 (insert " " element-name
