@@ -1502,7 +1502,7 @@ This is a specialization of `soap-decode-type' for
                                  (append attributes decoded-child)) result)
                    ;; When e-name is nil we don't want to introduce an extra
                    ;; level of nesting, so we splice the decoding into result.
-                   (push (car decoded-child) result))))
+                   (setq result (append decoded-child result)))))
              (cond ((and (eq (soap-xs-complex-type-indicator type) 'choice)
                          (> instance-count 0))
                     ;; This was a choice node, and we decoded one value.

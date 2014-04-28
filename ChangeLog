@@ -1,3 +1,7 @@
+2014-04-27  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
+	* soap-client.el (soap-decode-xs-complex-type): Fix splicing.
+
 2014-04-26  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
 
 	* soap-client.el (soap-decode-xs-complex-type): Eliminate invalid
