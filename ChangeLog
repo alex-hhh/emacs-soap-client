@@ -1,3 +1,8 @@
+2014-05-04  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
+	* soap-client.el (soap-encode-xs-complex-type): Print ref element
+	names in warnings.
+
 2014-04-27  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
 
 	* soap-client.el (soap-decode-xs-complex-type): Fix splicing.

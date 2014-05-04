@@ -1303,9 +1303,12 @@ This is a specialization of `soap-encode-value' for
                            (when (not (equal current-point (point)))
                              (incf instance-count))))))))
                ;; Do some sanity checking
-               (let ((indicator (soap-xs-complex-type-indicator type))
-                     (element-type (soap-xs-element-type element))
-                     (e-name (soap-xs-element-name element)))
+               (let* ((indicator (soap-xs-complex-type-indicator type))
+                      (element-type (soap-xs-element-type element))
+                      (reference (soap-xs-element-reference element))
+                      (e-name (or (soap-xs-element-name element)
+                                  (and reference
+                                       (soap-xs-element-name reference)))))
                  (cond ((and (eq indicator 'choice)
                              (> instance-count 0))
                         ;; This was a choice node and we encoded one instance
@@ -1318,7 +1321,7 @@ This is a specialization of `soap-encode-value' for
                                         element-type))))
                         (soap-warning
                          "While encoding %s: missing non-nillable slot %s"
-                         value (or e-name element)))
+                         value e-name))
                        ((and (> instance-count 1)
                              (not (soap-xs-element-multiple? element))
                              (and (soap-xs-complex-type-p element-type)
@@ -1326,8 +1329,8 @@ This is a specialization of `soap-encode-value' for
                                         element-type))))
                         (soap-warning
                          (concat  "While encoding %s: expected single,"
-                                  " found multiple slots for element: %s")
-                         value (or e-name element)))))))))))
+                                  " found multiple elements for slot %s")
+                         value e-name))))))))))
     (t
      (error "Don't know how to encode complex type: %s"
             (soap-xs-complex-type-indicator type)))))
