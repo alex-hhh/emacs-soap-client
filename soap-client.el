@@ -501,8 +501,8 @@ This is a specialization of `soap-encode-value' for
                 (error "Not a dateTime, date or time value"))))
         (boolean
          (unless (memq value '(t nil))
-           (error "Not a boolean value")
-           (insert (if value "true" "false"))))
+           (error "Not a boolean value"))
+         (insert (if value "true" "false")))
 
         ((long short int integer byte unsignedInt unsignedLong
                unsignedShort nonNegativeInteger decimal duration)
