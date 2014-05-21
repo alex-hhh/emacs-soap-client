@@ -398,7 +398,8 @@ binding) but the same name."
 
 (defstruct (soap-xs-type (:include soap-element))
   id
-  attributes)
+  attributes
+  attribute-groups)
 
 ;;;;; soap-xs-basic-type
 
@@ -766,6 +767,9 @@ This is a specialization of `soap-decode-type' for
   default                               ; the default value, if any
   reference)
 
+(defstruct (soap-xs-attribute-group (:include soap-xs-type))
+  reference)
+
 (defun soap-xs-parse-attribute (node)
   "Construct a `soap-xs-attribute' from NODE."
   (assert (eq (soap-l2wk (xml-node-name node)) 'xsd:attribute)
@@ -778,6 +782,37 @@ This is a specialization of `soap-decode-type' for
       (setq type (soap-xs-parse-simple-type
                   (soap-xml-node-first-child node))))
     (make-soap-xs-attribute :name name :type type :default default :reference ref)))
+
+(defun soap-xs-parse-attribute-group (node)
+  "Construct a `soap-xs-attribute-group' from NODE."
+  (let ((node-name (soap-l2wk (xml-node-name node))))
+    (assert (eq node-name 'xsd:attributeGroup)
+            "expecting xsd:attributeGroup, got %s" node-name)
+    (let ((name (xml-get-attribute-or-nil node 'name))
+          (id (xml-get-attribute-or-nil node 'id))
+          (ref (xml-get-attribute-or-nil node 'ref))
+          attribute-group)
+      (when (and name ref)
+        (soap-warning "name and ref set for attribute group %s" node-name))
+      (setq attribute-group
+            (make-soap-xs-attribute-group :id id
+                                          :name name
+                                          :reference (and ref (soap-l2fq ref))))
+      (when (not ref)
+        (dolist (child (xml-node-children node))
+          ;; Ignore whitespace.
+          (unless (stringp child)
+            ;; Ignore optional annotation.
+            ;; TODO: Implement anyAttribute support.
+            (case (soap-l2wk (xml-node-name child))
+              (xsd:attribute
+               (push (soap-xs-parse-attribute child)
+                     (soap-xs-type-attributes attribute-group)))
+              (xsd:attributeGroup
+               (push (soap-xs-parse-attribute-group child)
+                     (soap-xs-attribute-group-attribute-groups
+                      attribute-group)))))))
+      attribute-group)))
 
 (defun soap-resolve-references-for-xs-attribute (attribute wsdl)
   "Replace names in ATTRIBUTE with the referenced objects in the WSDL.
@@ -803,6 +838,29 @@ See also `soap-wsdl-resolve-references'."
 
 (put (aref (make-soap-xs-attribute) 0)
      'soap-resolve-references #'soap-resolve-references-for-xs-attribute)
+
+(defun soap-resolve-references-for-xs-attribute-group (attribute-group wsdl)
+  "Set slots in ATTRIBUTE-GROUP to the referenced objects in the WSDL.
+This is a specialization of `soap-resolve-references' for
+`soap-xs-attribute-group' objects.
+
+See also `soap-wsdl-resolve-references'."
+  (let ((reference (soap-xs-attribute-group-reference attribute-group)))
+    (when (soap-name-p reference)
+      (let ((resolved (soap-wsdl-get reference wsdl
+                                     'soap-xs-attribute-group-p)))
+        (setf (soap-xs-attribute-group-name attribute-group)
+              (soap-xs-attribute-group-name resolved))
+        (setf (soap-xs-attribute-group-id attribute-group)
+              (soap-xs-attribute-group-id resolved))
+        (setf (soap-xs-attribute-group-reference attribute-group) nil)
+        (setf (soap-xs-attribute-group-attributes attribute-group)
+              (soap-xs-attribute-group-attributes resolved))
+        (setf (soap-xs-attribute-group-attribute-groups attribute-group)
+              (soap-xs-attribute-group-attribute-groups resolved))))))
+
+(put (aref (make-soap-xs-attribute-group) 0)
+     'soap-resolve-references #'soap-resolve-references-for-xs-attribute-group)
 
 ;;;;; soap-xs-simple-type
 
@@ -933,8 +991,10 @@ See also `soap-wsdl-resolve-references'."
   (setf (soap-xs-simple-type-base type) (soap-l2fq (xml-get-attribute node 'base)))
   (dolist (attribute (soap-xml-get-children1 node 'xsd:attribute))
     (push (soap-xs-parse-attribute attribute)
-          (soap-xs-type-attributes type))))
-
+          (soap-xs-type-attributes type)))
+  (dolist (attribute-group (soap-xml-get-children1 node 'xsd:attributeGroup))
+    (push (soap-xs-parse-attribute-group attribute-group)
+          (soap-xs-type-attribute-groups type))))
 
 (defun soap-validate-xs-simple-type (value type)
   "Validate VALUE against the restrictions of TYPE."
@@ -1016,7 +1076,9 @@ See also `soap-wsdl-resolve-references'."
                                  (t     ; signal an error?
                                   type)))
                          base)))
-          (t (error "Oops")))))
+          (t (error "Oops"))))
+  (dolist (attribute-group (soap-xs-type-attribute-groups type))
+    (soap-resolve-references attribute-group wsdl)))
 
 (defun soap-encode-xs-simple-type-attributes (value type)
   "Encode the XML attributes for VALUE according to TYPE.
@@ -1075,11 +1137,15 @@ This is a specialization of `soap-decode-type' for
   (let ((name (xml-get-attribute-or-nil node 'name))
         (id (xml-get-attribute-or-nil node 'id))
         type
-        attributes)
+        attributes
+        attribute-groups)
     (dolist (def (xml-node-children node))
       (when (consp def)                 ; skip text nodes
         (case (soap-l2wk (xml-node-name def))
           (xsd:attribute (push (soap-xs-parse-attribute def) attributes))
+          (xsd:attributeGroup
+           (push (soap-xs-parse-attribute-group def)
+                                    attribute-groups))
           (xsd:simpleContent (setq type (soap-xs-parse-simple-type def)))
           ((xsd:sequence xsd:all xsd:choice) (setq type (soap-xs-parse-sequence def)))
           (xsd:complexContent
@@ -1088,6 +1154,8 @@ This is a specialization of `soap-decode-type' for
                (case (soap-l2wk (xml-node-name def))
                  (xsd:attribute
                   (push (soap-xs-parse-attribute def) attributes))
+                 (xsd:attributeGroup
+                  (push (soap-xs-parse-attribute-group def) attribute-groups))
                  ((xsd:extension xsd:restriction)
                   (setq type (soap-xs-parse-extension-or-restriction def)))
                  ((xsd:sequence xsd:all xsd:choice)
@@ -1102,7 +1170,8 @@ This is a specialization of `soap-decode-type' for
     (setf (soap-xs-type-id type) id)
     (setf (soap-xs-type-attributes type)
           (append attributes (soap-xs-type-attributes type)))
-
+    (setf (soap-xs-type-attribute-groups type)
+          (append attribute-groups (soap-xs-type-attribute-groups type)))
     type))
 
 (defun soap-xs-parse-sequence (node)
@@ -1137,7 +1206,10 @@ Returns a `soap-xs-complex-type'"
                    (soap-xs-complex-type-elements type))))
           (xsd:attribute
            (push (soap-xs-parse-attribute r)
-                 (soap-xs-type-attributes type))))))
+                 (soap-xs-type-attributes type)))
+          (xsd:attributeGroup
+           (push (soap-xs-parse-attribute-group r)
+                 (soap-xs-type-attribute-groups type))))))
 
     (setf (soap-xs-complex-type-elements type)
           (nreverse (soap-xs-complex-type-elements type)))
@@ -1153,6 +1225,7 @@ Return a `soap-xs-complex-type'."
           "unexpected node: %s" (soap-l2wk (xml-node-name node)))
   (let (type
         attributes
+        attribute-groups
         array?
         (base (xml-get-attribute-or-nil node 'base)))
 
@@ -1175,7 +1248,9 @@ Return a `soap-xs-complex-type'."
                      ;; Override
                      (setq base (match-string 1 array-type)))))
                ;; else
-               (push (soap-xs-parse-attribute def) attributes))))))
+               (push (soap-xs-parse-attribute def) attributes)))
+          (xsd:attributeGroup
+           (push (soap-xs-parse-attribute-group def) attribute-groups)))))
 
     (unless type
       (setq type (make-soap-xs-complex-type))
@@ -1184,6 +1259,7 @@ Return a `soap-xs-complex-type'."
 
     (setf (soap-xs-complex-type-base type) (soap-l2fq base))
     (setf (soap-xs-complex-type-attributes type) attributes)
+    (setf (soap-xs-complex-type-attribute-groups type) attribute-groups)
     type))
 
 (defun soap-resolve-references-for-xs-complex-type (type wsdl)
@@ -1206,7 +1282,9 @@ See also `soap-wsdl-resolve-references'."
           ((soap-xs-type-p base)
            (soap-resolve-references base wsdl))))
   (dolist (element (soap-xs-complex-type-elements type))
-    (soap-resolve-references element wsdl)))
+    (soap-resolve-references element wsdl))
+  (dolist (attribute-group (soap-xs-type-attribute-groups type))
+    (soap-resolve-references attribute-group wsdl)))
 
 (defun soap-encode-xs-complex-type-attributes (value type)
   "Encode the XML attributes for encoding VALUE according to TYPE.
@@ -1379,15 +1457,33 @@ multiple elements, nil otherwise."
              (soap-xs-complex-type-multiple-p
               (soap-xs-complex-type-base type))))))
 
+(defun soap-xs-attribute-group-consolidate (attribute-groups)
+  (when attribute-groups
+    (let (all-attributes)
+      ;; Collect child attribute groups recursively.
+      (dolist (attribute-group attribute-groups)
+        (let ((child-attribute-groups
+               (soap-xs-attribute-group-attribute-groups attribute-group)))
+          (setq all-attributes (append all-attributes
+                                       (soap-xs-attribute-group-consolidate
+                                        child-attribute-groups)
+                                       ;; Collect attributes in attribute-groups.
+                                       (soap-xs-attribute-group-attributes
+                                        attribute-group)))))
+      all-attributes)))
+
 (defun soap-xs-attributes-consolidate (type)
   "Return a list of all of TYPE's attributes and all of TYPE's
 ancestors' attributes."
   (let* ((base (and (soap-xs-complex-type-p type)
-                    (soap-xs-complex-type-base type))))
+                    (soap-xs-complex-type-base type)))
+         (attributes (append (soap-xs-type-attributes type)
+                             (soap-xs-attribute-group-consolidate
+                              (soap-xs-type-attribute-groups type)))))
     (if base
-        (append (soap-xs-type-attributes type)
+        (append attributes
                 (soap-xs-attributes-consolidate base))
-      (soap-xs-type-attributes type))))
+      attributes)))
 
 (defun soap-decode-xs-attributes (type node)
   "Use TYPE, a `soap-xs-complex-type', to decode the attributes
@@ -1565,6 +1661,8 @@ Return a SOAP-NAMESPACE containing the elements."
              (soap-namespace-put (soap-xs-parse-element def) ns))
             (xsd:attribute
              (soap-namespace-put (soap-xs-parse-attribute def) ns))
+            (xsd:attributeGroup
+             (soap-namespace-put (soap-xs-parse-attribute-group def) ns))
             (xsd:simpleType
              (soap-namespace-put (soap-xs-parse-simple-type def) ns))
             (xsd:complexType

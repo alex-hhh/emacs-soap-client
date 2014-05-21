@@ -1,3 +1,18 @@
+2014-05-21  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
+	* soap-client.el (soap-xs-type): Add attribute-group slot.
+	(soap-xs-attribute-group): New type.
+	(soap-xs-parse-attribute-group): New function.
+	(soap-resolve-references-for-xs-attribute-group): Likewise.
+	(soap-xs-add-extension): Handle attribute groups.
+	(soap-resolve-references-for-xs-simple-type): Likewise.
+	(soap-xs-parse-complex-type): Likewise.
+	(soap-xs-parse-extension-or-restriction): Likewise.
+	(soap-resolve-references-for-xs-complex-type): Likewise.
+	(soap-xs-attribute-group-consolidate): New function.
+	(soap-xs-attributes-consolidate): Handle attribute groups.
+	(soap-parse-schema): Likewise.
+
 2014-05-17  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
 
 	* soap-client.el (soap-encode-xs-basic-type): Fix boolean
