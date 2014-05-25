@@ -1,3 +1,10 @@
+2014-05-25  Alex Harsanyi  <AlexHarsanyi@gmail.com>
+
+	* soap-client.el (soap-get-xs-attributes-from-groups): renamed
+	from soap-xs-attribute-group-consolidate, all callers updated
+	(soap-get-xs-attributes): renamed from
+	soap-xs-attributes-consolidate, all callers updated
+
 2014-05-21  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
 
 	* soap-client.el (soap-xs-type): Add attribute-group slot.
