@@ -1496,7 +1496,12 @@ of NODE."
          ((soap-xs-basic-type-p attribute-type)
           ;; Basic type values are validated by xml.el.
           (when value
-            (push (cons symbol value) result)))
+            (push (cons symbol
+                        ;; Create a fake XML node to satisfy the
+                        ;; soap-decode-xs-basic-type API.
+                        (soap-decode-xs-basic-type attribute-type
+                                                   (list symbol nil value)))
+                  result)))
          ((soap-xs-simple-type-p attribute-type)
           (when value
             (push (cons symbol
