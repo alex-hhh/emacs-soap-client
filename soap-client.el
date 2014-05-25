@@ -1303,7 +1303,7 @@ This is a specialization of `soap-encode-attributes' for
                 "[" (format "%s" (length value)) "]" "\""))
       ;; else
       (progn
-        (dolist (a (soap-xs-attributes-consolidate type))
+        (dolist (a (soap-get-xs-attributes type))
           (let ((element-name (soap-element-name a)))
             (if (soap-xs-attribute-default a)
                 (insert " " element-name
@@ -1457,39 +1457,33 @@ multiple elements, nil otherwise."
              (soap-xs-complex-type-multiple-p
               (soap-xs-complex-type-base type))))))
 
-(defun soap-xs-attribute-group-consolidate (attribute-groups)
-  (when attribute-groups
-    (let (all-attributes)
-      ;; Collect child attribute groups recursively.
-      (dolist (attribute-group attribute-groups)
-        (let ((child-attribute-groups
-               (soap-xs-attribute-group-attribute-groups attribute-group)))
-          (setq all-attributes (append all-attributes
-                                       (soap-xs-attribute-group-consolidate
-                                        child-attribute-groups)
-                                       ;; Collect attributes in attribute-groups.
-                                       (soap-xs-attribute-group-attributes
-                                        attribute-group)))))
-      all-attributes)))
+(defun soap-get-xs-attributes-from-groups (attribute-groups)
+  "Return a list of atrributes from all ATTRIBUTE-GROUPS."
+  (let (attributes)
+    (dolist (group attribute-groups)
+      (let ((child-groups (soap-xs-attribute-group-attribute-groups group)))
+        (setq attributes (append attributes
+                                 (soap-get-xs-attributes-from-groups child-groups)
+                                 (soap-xs-attribute-group-attributes group)))))
+    attributes))
 
-(defun soap-xs-attributes-consolidate (type)
+(defun soap-get-xs-attributes (type)
   "Return a list of all of TYPE's attributes and all of TYPE's
 ancestors' attributes."
   (let* ((base (and (soap-xs-complex-type-p type)
                     (soap-xs-complex-type-base type)))
          (attributes (append (soap-xs-type-attributes type)
-                             (soap-xs-attribute-group-consolidate
+                             (soap-get-xs-attributes-from-groups
                               (soap-xs-type-attribute-groups type)))))
     (if base
-        (append attributes
-                (soap-xs-attributes-consolidate base))
-      attributes)))
+        (append attributes (soap-get-xs-attributes base))
+        attributes)))
 
 (defun soap-decode-xs-attributes (type node)
   "Use TYPE, a `soap-xs-complex-type', to decode the attributes
 of NODE."
   (let (result)
-    (dolist (attribute (soap-xs-attributes-consolidate type))
+    (dolist (attribute (soap-get-xs-attributes type))
       (let* ((name (soap-xs-attribute-name attribute))
              (fq-name (soap-xs-attribute-type attribute))
              (symbol (intern name))
