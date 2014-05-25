@@ -79,7 +79,7 @@
     ("xml" . "http://www.w3.org/XML/1998/namespace"))
   "A list of well known xml namespaces and their aliases.")
 
-(defvar soap-local-xmlns 
+(defvar soap-local-xmlns
   '(("xml" . "http://www.w3.org/XML/1998/namespace"))
   "A list of local namespace aliases.
 This is a dynamically bound variable, controlled by
@@ -416,10 +416,10 @@ binding) but the same name."
   "Construct NAMESPACE-NAME containing the XMLSchema basic types.
 An optional NAMESPACE-TAG can also be specified."
   (let ((ns (make-soap-namespace :name namespace-name)))
-    (dolist (type '("string" "language" "ID" "IDREF" 
+    (dolist (type '("string" "language" "ID" "IDREF"
                     "dateTime" "time" "date" "boolean"
                     "long" "short" "int" "integer" "nonNegativeInteger"
-                    "unsignedLong" "unsignedShort" "unsignedInt" 
+                    "unsignedLong" "unsignedShort" "unsignedInt"
                     "decimal" "duration"
                     "byte" "unsignedByte"
                     "float" "double"
@@ -509,7 +509,7 @@ This is a specialization of `soap-encode-value' for
                unsignedShort nonNegativeInteger decimal duration)
          (unless (integerp value)
            (error "Not an integer value"))
-         (when (and (memq kind '(unsignedInt unsignedLong 
+         (when (and (memq kind '(unsignedInt unsignedLong
                                  unsignedShort nonNegativeInteger))
                     (< value 0))
            (error "Not a positive integer"))
@@ -544,7 +544,7 @@ This is a specialization of `soap-decode-type' for
         (ecase kind
           ((string anyURI QName ID IDREF language) (car contents))
           ((dateTime time date) (car contents)) ; TODO: convert to a date time
-          ((long short int integer 
+          ((long short int integer
                  unsignedInt unsignedLong unsignedShort nonNegativeInteger
                  decimal byte float double duration)
            (string-to-number (car contents)))
@@ -626,9 +626,9 @@ contains a reference, we retrive the type of the reference."
               (if complex-type
                   (setq type (soap-xs-parse-complex-type (car complex-type)))
                   ;; else
-                  (error "Soap-xs-parse-element: node is missing type or ref"))))))
+                  (error "Soap-xs-parse-element: missing type or ref"))))))
 
-    (make-soap-xs-element :name name 
+    (make-soap-xs-element :name name
                           ;; Use the full namespace name for now, we will
                           ;; convert it to a nstag in
                           ;; `soap-resolve-references-for-xs-element'
@@ -661,7 +661,7 @@ See also `soap-wsdl-resolve-references'."
            (soap-resolve-references type wsdl))
 
           ;; TODO: It is OK not to have a type? (it might have a reference...)
-          
+
           ;; (t (error "Unknown type for element: %s" type))
 
           ))
@@ -687,9 +687,9 @@ This is a specialization of `soap-encode-attributes' for
 
 (defun soap-should-encode-value-for-xs-element (value element)
   ""
-  (cond 
+  (cond
     ;; if value is not nil, attempt to encode it
-    (value)                      
+    (value)
 
     ;; value is nil, but the element's type is a boolean, so nil in this case
     ;; means "false".  We need to encode it.
@@ -699,10 +699,10 @@ This is a specialization of `soap-encode-attributes' for
 
     ;; This is not an optional element.  Force encoding it (although this
     ;; might fail at the validation step, but this is what we intend.
-    
+
     ;; TODO: The follwing check fails on ews, leave it out for now
     ;; ((not (soap-xs-element-optional? element)))
-     
+
     ;; value is nil, but the element's type has some attributes which supply a
     ;; default value.  We need to encode it.
 
@@ -781,7 +781,8 @@ This is a specialization of `soap-decode-type' for
     (unless (or type ref)
       (setq type (soap-xs-parse-simple-type
                   (soap-xml-node-first-child node))))
-    (make-soap-xs-attribute :name name :type type :default default :reference ref)))
+    (make-soap-xs-attribute
+     :name name :type type :default default :reference ref)))
 
 (defun soap-xs-parse-attribute-group (node)
   "Construct a `soap-xs-attribute-group' from NODE."
@@ -823,7 +824,7 @@ See also `soap-wsdl-resolve-references'."
   (let ((type (soap-xs-attribute-type attribute)))
     (cond ((soap-name-p type)
            (setf (soap-xs-attribute-type attribute)
-                 (soap-wsdl-get type wsdl 
+                 (soap-wsdl-get type wsdl
                                 (lambda (type)
                                   (or (soap-xs-basic-type-p type)
                                       (soap-xs-simple-type-p type))))))
@@ -893,7 +894,7 @@ See also `soap-wsdl-resolve-references'."
   (let ((name (xml-get-attribute-or-nil node 'name))
         (id (xml-get-attribute-or-nil node 'id)))
 
-    (let ((type (make-soap-xs-simple-type 
+    (let ((type (make-soap-xs-simple-type
                  :name name :namespace-tag soap-target-xmlns :id id))
           (def (soap-xml-node-first-child node)))
       (ecase (soap-l2wk (xml-node-name def))
@@ -901,7 +902,7 @@ See also `soap-wsdl-resolve-references'."
         (xsd:extension (soap-xs-add-extension def type))
         (xsd:union (soap-xs-add-union def type))
         (xsd:list nil))                 ; TODO: add support for this
-      
+
       type)))
 
 (defun soap-xs-add-restriction (node type)
@@ -975,7 +976,7 @@ See also `soap-wsdl-resolve-references'."
           "expecting xsd:union node, got %s" (soap-l2wk (xml-node-name node)))
 
   (setf (soap-xs-simple-type-base type)
-        (mapcar 'soap-l2fq 
+        (mapcar 'soap-l2fq
                 (split-string
                  (or (xml-get-attribute-or-nil node 'memberTypes) ""))))
 
@@ -1056,7 +1057,7 @@ See also `soap-wsdl-resolve-references'."
           (setf (soap-element-namespace-tag type) nstag)))))
 
   (let ((base (soap-xs-simple-type-base type)))
-    (cond 
+    (cond
            ;; TODO: It is OK not to have a base?
            ;; ((not base)
            ;; (error "Simple type %s has no base" (soap-xs-type-name type)))
@@ -1147,7 +1148,8 @@ This is a specialization of `soap-decode-type' for
            (push (soap-xs-parse-attribute-group def)
                                     attribute-groups))
           (xsd:simpleContent (setq type (soap-xs-parse-simple-type def)))
-          ((xsd:sequence xsd:all xsd:choice) (setq type (soap-xs-parse-sequence def)))
+          ((xsd:sequence xsd:all xsd:choice)
+           (setq type (soap-xs-parse-sequence def)))
           (xsd:complexContent
            (dolist (def (xml-node-children def))
              (when (consp def)
@@ -1461,9 +1463,9 @@ multiple elements, nil otherwise."
   "Return a list of atrributes from all ATTRIBUTE-GROUPS."
   (let (attributes)
     (dolist (group attribute-groups)
-      (let ((child-groups (soap-xs-attribute-group-attribute-groups group)))
+      (let ((sub-groups (soap-xs-attribute-group-attribute-groups group)))
         (setq attributes (append attributes
-                                 (soap-get-xs-attributes-from-groups child-groups)
+                                 (soap-get-xs-attributes-from-groups sub-groups)
                                  (soap-xs-attribute-group-attributes group)))))
     attributes))
 
@@ -1939,7 +1941,7 @@ See also `soap-resolve-references' and
                      (soap-namespace-get k port-ops 'soap-operation-p))
                (let (resolved-headers)
                  (dolist (h (soap-bound-operation-soap-headers v))
-                   (push (list (soap-wsdl-get (nth 0 h) wsdl) 
+                   (push (list (soap-wsdl-get (nth 0 h) wsdl)
                                (intern (nth 1 h))
                                (nth 2 h))
                          resolved-headers))
@@ -2036,7 +2038,7 @@ traverse an element tree."
 
 (defun soap-fetch-xml-from-file (file)
   "Load an XML document from FILE and return it."
-  (setq file (expand-file-name file 
+  (setq file (expand-file-name file
                                (if soap-current-file
                                    (file-name-directory soap-current-file)
                                    default-directory)))
@@ -2054,12 +2056,12 @@ traverse an element tree."
 
 (defun soap-load-wsdl (file-or-url &optional wsdl)
   "Load a WSDL document from FILE-OR-URL and return it."
-  (unless wsdl 
+  (unless wsdl
     (setq soap-current-file nil
           soap-xmlschema-imports nil))
   (let ((xml (soap-fetch-xml file-or-url))
         (wsdl (or wsdl (soap-make-wsdl file-or-url))))
-    (soap-wsdl-resolve-references 
+    (soap-wsdl-resolve-references
      (soap-parse-wsdl xml wsdl))
     wsdl))
 
@@ -2152,8 +2154,8 @@ traverse an element tree."
         (if element
             (setq element (soap-l2fq element 'tns))
             ;; else
-            (setq element (make-soap-xs-element 
-                           :name name 
+            (setq element (make-soap-xs-element
+                           :name name
                            :namespace-tag soap-target-xmlns
                            :type^ type)))
 
@@ -2280,7 +2282,7 @@ traverse an element tree."
                 (setq use (or use
                               (xml-get-attribute-or-nil b 'use))))))
 
-          (puthash name (make-soap-bound-operation 
+          (puthash name (make-soap-bound-operation
                          :operation name
                          :soap-action soap-action
                          :soap-headers (nreverse soap-headers)
@@ -2499,9 +2501,9 @@ reference multiRef parts which are external to RESPONSE-NODE."
             (unless node
               (error "Soap-parse-response(%s): cannot find message part %s"
                      (soap-element-name op) tag))
-	    (let ((decoded-value (soap-decode-type type node)))
-	      (when decoded-value
-		(push decoded-value decoded-parts)))))
+            (let ((decoded-value (soap-decode-type type node)))
+              (when decoded-value
+                (push decoded-value decoded-parts)))))
 
         decoded-parts))))
 
@@ -2672,9 +2674,9 @@ operations in a WSDL document."
             (url-package-name "soap-client.el")
             (url-package-version "1.0")
             (url-http-version "1.0")
-            (url-request-data 
+            (url-request-data
              ;; url-request-data expects a unibyte string already encoded...
-             (encode-coding-string 
+             (encode-coding-string
               (soap-create-envelope operation parameters wsdl)
               'utf-8))
             (url-mime-charset-string "utf-8;q=1, iso-8859-1;q=0.5")
