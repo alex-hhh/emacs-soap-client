@@ -2225,8 +2225,8 @@ operations in a WSDL document."
             (url-http-attempt-keepalives t)
             (url-request-extra-headers (list
                                         (cons "SOAPAction"
-                                              (soap-bound-operation-soap-action
-                                               operation))
+                                              (concat "\"" (soap-bound-operation-soap-action
+							    operation) "\""))
                                         (cons "Content-Type"
                                               "text/xml; charset=utf-8"))))
         (let ((buffer (url-retrieve-synchronously
