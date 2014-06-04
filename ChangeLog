@@ -1,3 +1,9 @@
+2014-06-03  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
+	* soap-client.el (soap-xs-add-union): Preserve WSDL order of
+	inline simpleType nodes.
+	(soap-decode-type): Handle union types.
+
 2014-05-25  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
 
 	* soap-client.el (soap-decode-xs-attributes): Decode basic-type

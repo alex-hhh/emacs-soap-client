@@ -983,9 +983,10 @@ See also `soap-wsdl-resolve-references'."
   ;; Additional simple types can be defined inside the union node.  Add them
   ;; to the base list.  The "memberTypes" members will have to be resolved by
   ;; the "resolve-references" method, the inline types will not.
-  (dolist (simple-type (soap-xml-get-children1 node 'xsd:simpleType))
-    (push (soap-xs-parse-simple-type simple-type)
-          (soap-xs-simple-type-base type))))
+  (let (result)
+    (dolist (simple-type (soap-xml-get-children1 node 'xsd:simpleType))
+      (push (soap-xs-parse-simple-type simple-type) result))
+    (setf (soap-xs-simple-type-base type) (nreverse result))))
 
 (defun soap-xs-add-extension (node type)
   "Add the extended type defined in XML NODE to TYPE, an `soap-xs-simple-type'."
@@ -2340,10 +2341,21 @@ decode function to perform the actual decoding."
            (soap-with-local-xmlns node
              (if (equal (soap-xml-get-attribute-or-nil1 node 'xsi:nil) "true")
                  nil
-                 (let ((decoder (get (aref type 0) 'soap-decoder)))
-                   (assert decoder nil
-                           "no soap-decoder for %s type" (aref type 0))
-                   (funcall decoder type node))))))))
+               ;; Handle union types.
+               (cond ((listp type)
+                      (catch 'done
+                        (dolist (union-member type)
+                          (let* ((decoder (get (aref union-member 0)
+                                               'soap-decoder))
+                                 (result (ignore-errors
+                                           (funcall decoder
+                                                    union-member node))))
+                            (when result (throw 'done result))))))
+                     (t
+                      (let ((decoder (get (aref type 0) 'soap-decoder)))
+                        (assert decoder nil
+                                "no soap-decoder for %s type" (aref type 0))
+                        (funcall decoder type node))))))))))
 
 (defun soap-decode-any-type (node)
   "Decode NODE using type information inside it."
