@@ -42,6 +42,7 @@
 (eval-when-compile (require 'cl))
 
 (require 'xml)
+(require 'xsd-regexp)
 (require 'warnings)
 (require 'url)
 (require 'url-http)
@@ -922,7 +923,8 @@ See also `soap-wsdl-resolve-references'."
           (xsd:enumeration
            (push value (soap-xs-simple-type-enumeration type)))
           (xsd:pattern
-           (setf (soap-xs-simple-type-pattern type) value))
+           (setf (soap-xs-simple-type-pattern type)
+                 (concat "\\`" (xsdre-translate value) "\\'")))
           (xsd:length
            (let ((value (string-to-number value)))
              (setf (soap-xs-simple-type-length-range type) (cons value value))))
@@ -1006,7 +1008,10 @@ See also `soap-wsdl-resolve-references'."
       (error "Xs-simple-type(%s, %s): bad value, should be one of %s"
              value (soap-element-fq-name type) enumeration)))
 
-  ;; TODO validate against the pattern
+  (let ((pattern (soap-xs-simple-type-pattern type)))
+    (when (and pattern (not (string-match-p pattern value)))
+      (error "Xs-simple-type(%s, %s): bad value, should match pattern %s"
+             value (soap-element-fq-name type) pattern)))
 
   (let ((length-range (soap-xs-simple-type-length-range type)))
     (when length-range
