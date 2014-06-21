@@ -1,3 +1,9 @@
+2014-06-21  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
+	* soap-client.el (soap-xs-add-restriction): Translate pattern to
+	Emacs regexp using xsdre-translate.
+	(soap-validate-xs-simple-type): Validate value against pattern.
+
 2014-06-03  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
 
 	* soap-client.el (soap-xs-add-union): Preserve WSDL order of
