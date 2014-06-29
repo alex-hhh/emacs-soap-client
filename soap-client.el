@@ -988,7 +988,8 @@ See also `soap-wsdl-resolve-references'."
   (let (result)
     (dolist (simple-type (soap-xml-get-children1 node 'xsd:simpleType))
       (push (soap-xs-parse-simple-type simple-type) result))
-    (setf (soap-xs-simple-type-base type) (nreverse result))))
+    (setf (soap-xs-simple-type-base type)
+          (append (soap-xs-simple-type-base type) (nreverse result)))))
 
 (defun soap-xs-add-extension (node type)
   "Add the extended type defined in XML NODE to TYPE, an `soap-xs-simple-type'."
@@ -1003,49 +1004,65 @@ See also `soap-wsdl-resolve-references'."
 (defun soap-validate-xs-simple-type (value type)
   "Validate VALUE against the restrictions of TYPE."
 
-  (let ((enumeration (soap-xs-simple-type-enumeration type)))
-    (when (and (> (length enumeration) 1) (not (member value enumeration)))
-      (error "Xs-simple-type(%s, %s): bad value, should be one of %s"
-             value (soap-element-fq-name type) enumeration)))
+  (let* ((base-type (soap-xs-simple-type-base type))
+         (messages nil))
+    (if (listp base-type)
+        (catch 'valid
+          (dolist (base base-type)
+            (condition-case error-object
+                (cond ((soap-xs-simple-type-p base)
+                       (throw 'valid
+                              (soap-validate-xs-simple-type value base)))
+                      ;; TODO: Implement soap-validate-xs-basic-type.
+                      )
+              (error (push (cadr error-object) messages))))
+          (when messages
+            (error (mapconcat 'identity (nreverse messages) "; and: "))))
+      (cl-flet ((fail-with-message (format value)
+                                   (push (format format value) messages)
+                                   (throw 'invalid nil)))
+        (catch 'invalid
+          (let ((enumeration (soap-xs-simple-type-enumeration type)))
+            (when (and (> (length enumeration) 1)
+                       (not (member value enumeration)))
+              (fail-with-message "bad value, should be one of %s" enumeration)))
 
-  (let ((pattern (soap-xs-simple-type-pattern type)))
-    (when (and pattern (not (string-match-p pattern value)))
-      (error "Xs-simple-type(%s, %s): bad value, should match pattern %s"
-             value (soap-element-fq-name type) pattern)))
+          (let ((pattern (soap-xs-simple-type-pattern type)))
+            (when (and pattern (not (string-match-p pattern value)))
+              (fail-with-message "bad value, should match pattern %s" pattern)))
 
-  (let ((length-range (soap-xs-simple-type-length-range type)))
-    (when length-range
-      (unless (stringp value)
-        (error
-         "Xs-simple-type(%s, %s): bad value, should be a string with length range %s"
-         value (soap-element-fq-name type) length-range))
-      (when (car length-range)
-        (unless (>= (length value) (car length-range))
-          (error
-         "Xs-simple-type(%s, %s): short string, should be at least %s chars"
-         value (soap-element-fq-name type) (car length-range))))
-      (when (cdr length-range)
-        (unless (<= (length value) (cdr length-range))
-          (error
-         "Xs-simple-type(%s, %s): long string, should be at most %s chars"
-         value (soap-element-fq-name type) (cdr length-range))))))
+          (let ((length-range (soap-xs-simple-type-length-range type)))
+            (when length-range
+              (unless (stringp value)
+                (fail-with-message
+                         "bad value, should be a string with length range %s"
+                         length-range))
+              (when (car length-range)
+                (unless (>= (length value) (car length-range))
+                  (fail-with-message "short string, should be at least %s chars"
+                           (car length-range))))
+              (when (cdr length-range)
+                (unless (<= (length value) (cdr length-range))
+                  (fail-with-message "long string, should be at most %s chars"
+                           (cdr length-range))))))
 
-  (let ((integer-range (soap-xs-simple-type-integer-range type)))
-    (when integer-range
-      (unless (numberp value)
-        (error
-         "Xs-simple-type(%s, %s): bad value, should be a number with range %s"
-         value (soap-element-fq-name type) integer-range))
-      (when (car integer-range)
-        (unless (>= value (car integer-range))
-          (error
-         "Xs-simple-type(%s, %s): small value, should be at least %s"
-         value (soap-element-fq-name type) (car integer-range))))
-      (when (cdr integer-range)
-        (unless (<= value (cdr integer-range))
-          (error
-         "Xs-simple-type(%s, %s): big value, should be at most %s"
-         value (soap-element-fq-name type) (cdr integer-range))))))
+          (let ((integer-range (soap-xs-simple-type-integer-range type)))
+            (when integer-range
+              (unless (numberp value)
+                (fail-with-message "bad value, should be a number with range %s"
+                         integer-range))
+              (when (car integer-range)
+                (unless (>= value (car integer-range))
+                  (fail-with-message "small value, should be at least %s"
+                           (car integer-range))))
+              (when (cdr integer-range)
+                (unless (<= value (cdr integer-range))
+                  (fail-with-message "big value, should be at most %s"
+                           (cdr integer-range))))))))
+      (when messages
+        (error "Xs-simple-type(%s, %s): %s"
+               value (or (soap-xs-type-name type) (soap-xs-type-id type))
+               (car messages)))))
   ;; Return the validated value.
   value)
 

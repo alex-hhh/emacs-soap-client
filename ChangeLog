@@ -1,3 +1,9 @@
+2014-06-29  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
+	* soap-client.el (soap-xs-add-union): Append result to base
+	instead of overwriting it.
+	(soap-validate-xs-simple-type): Add union support.
+
 2014-06-21  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
 
 	* soap-client.el (soap-xs-add-restriction): Translate pattern to
