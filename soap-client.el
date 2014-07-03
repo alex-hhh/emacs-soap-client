@@ -43,6 +43,8 @@
 
 (require 'xml)
 (require 'xsd-regexp)
+(require 'rng-xsd)
+(require 'rng-dt)
 (require 'warnings)
 (require 'url)
 (require 'url-http)
@@ -1001,6 +1003,20 @@ See also `soap-wsdl-resolve-references'."
     (push (soap-xs-parse-attribute-group attribute-group)
           (soap-xs-type-attribute-groups type))))
 
+(defun soap-validate-xs-basic-type (value type)
+  "Validate VALUE against the basic type TYPE."
+  (let* ((kind (soap-xs-basic-type-kind type)))
+    (case kind
+      ((anyType Array byte[])
+       value)
+      (t
+       (let ((convert (get kind 'rng-xsd-convert)))
+         (if convert
+             (if (rng-dt-make-value convert value)
+                 value
+               (error "Invalid %s: %s" (symbol-name kind) value))
+           (error "don't know how to convert %s" kind)))))))
+
 (defun soap-validate-xs-simple-type (value type)
   "Validate VALUE against the restrictions of TYPE."
 
@@ -1013,8 +1029,9 @@ See also `soap-wsdl-resolve-references'."
                 (cond ((soap-xs-simple-type-p base)
                        (throw 'valid
                               (soap-validate-xs-simple-type value base)))
-                      ;; TODO: Implement soap-validate-xs-basic-type.
-                      )
+                      ((soap-xs-basic-type-p base)
+                       (throw 'valid
+                              (soap-validate-xs-basic-type value base))))
               (error (push (cadr error-object) messages))))
           (when messages
             (error (mapconcat 'identity (nreverse messages) "; and: "))))
