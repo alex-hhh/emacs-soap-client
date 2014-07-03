@@ -1,3 +1,8 @@
+2014-07-03  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
+	* soap-client.el (soap-validate-xs-basic-type): New function.
+	(soap-validate-xs-simple-type): Call soap-validate-xs-basic-type.
+
 2014-06-29  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
 
 	* soap-client.el (soap-xs-add-union): Append result to base
