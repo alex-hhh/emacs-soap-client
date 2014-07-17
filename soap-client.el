@@ -537,6 +537,76 @@ This is a specialization of `soap-encode-value' for
         (soap-validate-xs-basic-type value-string type)
         (insert value-string)))))
 
+(defun soap-decode-date-time (date-time-string)
+  "Decode DATE-TIME-STRING, in ISO 8601 basic or extended format,
+and return a list in the same format as DECODE-TIME."
+  (let* ((datetime-regexp (cadr (get 'dateTime 'rng-xsd-convert)))
+         (unused (string-match datetime-regexp date-time-string))
+         (year-sign (match-string 1 date-time-string))
+         (year (match-string 2 date-time-string))
+         (month (match-string 3 date-time-string))
+         (day (match-string 4 date-time-string))
+         (hour (match-string 5 date-time-string))
+         (minute (match-string 6 date-time-string))
+         (second (match-string 7 date-time-string))
+         (second-fraction (match-string 8 date-time-string))
+         (has-time-zone (match-string 9 date-time-string))
+         (time-zone-sign (match-string 10 date-time-string))
+         (time-zone-hour (match-string 11 date-time-string))
+         (time-zone-minute (match-string 12 date-time-string)))
+    (setq year-sign (if year-sign -1 1))
+    (setq year
+          (if year
+              (* year-sign
+                 (string-to-number year))
+            2000))
+    (if (equal year 2000) (message "yes"))
+    (setq month
+          (if month (string-to-number month) 1))
+    (setq day
+          (if day (string-to-number day) 1))
+    (setq hour
+          (if hour (string-to-number hour) 0))
+    (setq minute
+          (if minute (string-to-number minute) 0))
+    (setq second
+          (if second (string-to-number second) 0))
+    (setq second-fraction
+          (if second-fraction
+              (float (string-to-number second-fraction))
+            0.0))
+    (setq has-time-zone (and has-time-zone t))
+    (setq time-zone-sign
+          (if (equal time-zone-sign "-") -1 1))
+    (setq time-zone-hour
+          (if time-zone-hour (string-to-number time-zone-hour) 0))
+    (setq time-zone-minute
+          (if time-zone-minute (string-to-number time-zone-minute) 0))
+    (unless (and
+             ;; XSD does not allow year 0.
+             (> year 0)
+             (>= month 1) (<= month 12)
+             (>= day 1) (<= day (rng-xsd-days-in-month year month))
+             (>= hour 0) (<= hour 23)
+             (>= minute 0) (<= minute 59)
+             ;; 60 represents a leap second.
+             (<= second 60)
+             (>= time-zone-hour 0)
+             (<= time-zone-hour 23)
+             (>= time-zone-minute 0)
+             (<= time-zone-minute 59))
+      (error "Invalid or unsupported dateTime: %s" date-time-string))
+    ;; Return a value suitable for encode-time.
+    (list second minute hour day month year second-fraction nil
+          (if has-time-zone
+              (* (rng-xsd-time-to-seconds
+                  time-zone-hour
+                  time-zone-minute
+                  0)
+                 time-zone-sign)
+            ;; UTC.
+            0))))
+
 (defun soap-decode-xs-basic-type (type node)
   "Use TYPE, a `soap-xs-basic-type', to decode the contents of NODE.
 A LISP value is returned based on the contents of NODE and the
@@ -571,7 +641,8 @@ This is a specialization of `soap-decode-type' for
         nil
         (ecase kind
           ((string anyURI QName ID IDREF language) (car contents))
-          ((dateTime time date) (car contents)) ; TODO: convert to a date time
+          ((dateTime time date gYearMonth gYear gMonthDay gDay gMonth)
+           (soap-decode-date-time (car contents)))
           ((long short int integer
                  unsignedInt unsignedLong unsignedShort nonNegativeInteger
                  decimal byte float double duration)
