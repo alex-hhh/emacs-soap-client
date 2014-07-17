@@ -757,13 +757,7 @@ See also `soap-wsdl-resolve-references'."
           ((soap-xs-type-p type)
            ;; an inline defined type, this will not be reached from anywhere
            ;; else, so we must resolve references now.
-           (soap-resolve-references type wsdl))
-
-          ;; TODO: It is OK not to have a type? (it might have a reference...)
-
-          ;; (t (error "Unknown type for element: %s" type))
-
-          ))
+           (soap-resolve-references type wsdl))))
   (let ((reference (soap-xs-element-reference element)))
     (when (soap-name-p reference)
       (setf (soap-xs-element-reference element)
@@ -798,9 +792,6 @@ This is a specialization of `soap-encode-attributes' for
 
     ;; This is not an optional element.  Force encoding it (although this
     ;; might fail at the validation step, but this is what we intend.
-
-    ;; TODO: The follwing check fails on ews, leave it out for now
-    ;; ((not (soap-xs-element-optional? element)))
 
     ;; value is nil, but the element's type has some attributes which supply a
     ;; default value.  We need to encode it.
@@ -1194,9 +1185,6 @@ See also `soap-wsdl-resolve-references'."
 
   (let ((base (soap-xs-simple-type-base type)))
     (cond
-           ;; TODO: It is OK not to have a base?
-           ;; ((not base)
-           ;; (error "Simple type %s has no base" (soap-xs-type-name type)))
           ((soap-name-p base)
            (setf (soap-xs-simple-type-base type)
                  (soap-wsdl-get base wsdl 'soap-xs-type-p)))
@@ -1506,10 +1494,8 @@ This is a specialization of `soap-encode-value' for
                              (soap-encode-value (cdr v) candidate))))
                      (if (soap-xs-complex-type-indicator type)
                          (let ((current-point (point)))
-                           ;; TODO: Maybe make soap-encode-value return t on
-                           ;; success, nil on failure.  For now, check if
-                           ;; encoding happened by checking if characters were
-                           ;; inserted in the buffer.
+                           ;; Check if encoding happened by checking if
+                           ;; characters were inserted in the buffer.
                            (soap-encode-value value candidate)
                            (when (not (equal current-point (point)))
                                (incf instance-count)))
