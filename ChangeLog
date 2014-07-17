@@ -1,5 +1,11 @@
 2014-07-03  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
 
+	* soap-client.el (soap-encode-xs-basic-type): Validate value after
+	encoding.
+	(soap-decode-xs-basic-type): Validate value before decoding.
+
+2014-07-03  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
 	* soap-client.el (soap-validate-xs-basic-type): New function.
 	(soap-validate-xs-simple-type): Call soap-validate-xs-basic-type.
 
