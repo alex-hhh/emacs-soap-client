@@ -486,51 +486,56 @@ This is a specialization of `soap-encode-value' for
     ;; also represents "false" when the type is boolean...
 
     (when (or value (eq kind 'boolean))
-      (case kind
-        ((string anyURI QName ID IDREF language)
-         (unless (stringp value)
-           (error "Not a string value: %s" value))
-         (insert (url-insert-entities-in-string value)))
-        ((dateTime time date)
-         ;; TODO: are time and date encoded the same way?
-         (cond ((and (consp value) ; is there a time-value-p ?
-                     (>= (length value) 2)
-                     (numberp (nth 0 value))
-                     (numberp (nth 1 value)))
-                ;; Value is a (current-time) style value, convert to a string
-                (insert (format-time-string "%Y-%m-%dT%H:%M:%S" value)))
-               ((stringp value)
-                (insert (url-insert-entities-in-string value)))
-               (t
-                (error "Not a dateTime, date or time value"))))
-        (boolean
-         (unless (memq value '(t nil))
-           (error "Not a boolean value"))
-         (insert (if value "true" "false")))
+      (let ((value-string
+             (case kind
+               ((string anyURI QName ID IDREF language)
+                (unless (stringp value)
+                  (error "Not a string value: %s" value))
+                (url-insert-entities-in-string value))
+               ((dateTime time date)
+                ;; TODO: are time and date encoded the same way?
+                (cond ((and (consp value) ; is there a time-value-p ?
+                            (>= (length value) 2)
+                            (numberp (nth 0 value))
+                            (numberp (nth 1 value)))
+                       ;; Value is a (current-time) style value, convert to a
+                       ;; string
+                       (format-time-string "%Y-%m-%dT%H:%M:%S" value))
+                      ((stringp value)
+                       (url-insert-entities-in-string value))
+                      (t
+                       (error "Not a dateTime, date or time value"))))
+               (boolean
+                (unless (memq value '(t nil))
+                  (error "Not a boolean value"))
+                (if value "true" "false"))
 
-        ((long short int integer byte unsignedInt unsignedLong
-               unsignedShort nonNegativeInteger decimal duration)
-         (unless (integerp value)
-           (error "Not an integer value"))
-         (when (and (memq kind '(unsignedInt unsignedLong
-                                 unsignedShort nonNegativeInteger))
-                    (< value 0))
-           (error "Not a positive integer"))
-         (insert (number-to-string value)))
+               ((long short int integer byte unsignedInt unsignedLong
+                      unsignedShort nonNegativeInteger decimal duration)
+                (unless (integerp value)
+                  (error "Not an integer value"))
+                (when (and (memq kind '(unsignedInt unsignedLong
+                                                    unsignedShort
+                                                    nonNegativeInteger))
+                           (< value 0))
+                  (error "Not a positive integer"))
+                (number-to-string value))
 
-        ((float double)
-         (unless (numberp value)
-           (error "Not a number"))
-         (insert (number-to-string value)))
+               ((float double)
+                (unless (numberp value)
+                  (error "Not a number"))
+                (number-to-string value))
 
-        (base64Binary
-         (unless (stringp value)
-           (error "Not a string value for base64Binary"))
-         (insert (base64-encode-string value)))
+               (base64Binary
+                (unless (stringp value)
+                  (error "Not a string value for base64Binary"))
+                (base64-encode-string value))
 
-        (otherwise
-         (error "Don't know how to encode %s for type %s"
-                value (soap-element-fq-name type)))))))
+               (otherwise
+                (error "Don't know how to encode %s for type %s"
+                       value (soap-element-fq-name type))))))
+        (soap-validate-xs-basic-type value-string type)
+        (insert value-string)))))
 
 (defun soap-decode-xs-basic-type (type node)
   "Use TYPE, a `soap-xs-basic-type', to decode the contents of NODE.
@@ -540,7 +545,27 @@ type-info stored in TYPE.
 This is a specialization of `soap-decode-type' for
 `soap-xs-basic-type' objects."
   (let ((contents (xml-node-children node))
-        (kind (soap-xs-basic-type-kind type)))
+        (kind (soap-xs-basic-type-kind type))
+        (attributes (xml-node-attributes node))
+        (validate-type type)
+        (is-nil nil))
+
+    (dolist (attribute attributes)
+      (let ((attribute-type (soap-l2fq (car attribute)))
+            (attribute-value (cdr attribute)))
+        ;; xsi:type can override an element's expected type.
+        (when (and (equal attribute-type (soap-l2fq "xsi:type")))
+          (setq validate-type
+                (soap-wsdl-get attribute-value soap-current-wsdl)))
+        ;; xsi:nil can specify that an element is nil in which case we don't
+        ;; validate it.
+        (when (equal attribute-type (soap-l2fq "xsi:nil"))
+          (setq is-nil (string= (downcase attribute-value) "true")))))
+
+    (unless is-nil
+      ;; For validation purposes, when xml-node-children returns nil, treat it
+      ;; as the empty string.
+      (soap-validate-xs-basic-type (car (or contents (list ""))) validate-type))
 
     (if (null contents)
         nil
