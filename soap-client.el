@@ -105,6 +105,24 @@ dynamically bound variable, controlled by
   "The current file name while parsing a WSDL document.
 This value is only valid while a WSDL is loaded")
 
+(defvar soap-time-format 'string
+  "The current format for dateTime, time, date, gYearMonth, gYear,
+gMonthDay, gDay and gMonth.  Decoding will be from an ISO 8601
+string to this format.  Encoding will be from this format to an
+ISO 8601 string.  Supported formats are:
+
+'string:   Leave the string as-is.
+
+'internal: Decode the string directly into the Emacs-internal
+           time format.
+
+Emacs SOAP client supports up to 9 decimal places (nanoseconds)
+of time precision.
+
+SOAP-TIME-FORMAT is meant to be bound dynamically around
+soap-client calls.  It defaults to 'string for
+backward-compatibility.")
+
 (defvar soap-xmlschema-imports nil
   "A list of additional XSD schema files to load.
 This is filled from <xsd:import> statememts while parsing a WSDL
@@ -469,7 +487,9 @@ position.
 
 This is a specialization of `soap-encode-value' for
 `soap-xs-basic-type' objects."
-  (let ((kind (soap-xs-basic-type-kind type)))
+  (let ((kind (soap-xs-basic-type-kind type))
+        (time-value-p nil)
+        (fractional-seconds-p nil))
 
     (when (eq kind 'anyType)
       (cond ((stringp value)
@@ -492,19 +512,64 @@ This is a specialization of `soap-encode-value' for
                 (unless (stringp value)
                   (error "Not a string value: %s" value))
                 (url-insert-entities-in-string value))
-               ((dateTime time date)
-                ;; TODO: are time and date encoded the same way?
-                (cond ((and (consp value) ; is there a time-value-p ?
-                            (>= (length value) 2)
-                            (numberp (nth 0 value))
-                            (numberp (nth 1 value)))
-                       ;; Value is a (current-time) style value, convert to a
-                       ;; string
-                       (format-time-string "%Y-%m-%dT%H:%M:%S" value))
-                      ((stringp value)
+               ((dateTime time date gYearMonth gYear gMonthDay gDay gMonth)
+                (cond ((and (eq soap-time-format 'internal)
+                            (consp value)
+                            (progn
+                              (when (>= (length value) 2)
+                                (if (and (numberp (nth 0 value))
+                                         (numberp (nth 1 value)))
+                                    (setq time-value-p t)
+                                  (setq time-value-p nil)))
+                              (when (and time-value-p
+                                         (>= (length value) 3))
+                                (if (numberp (nth 2 value))
+                                    ;; time-value-p is still t.
+                                    (when (> (nth 2 value) 0)
+                                      (setq fractional-seconds-p t))
+                                  (setq time-value-p nil)))
+                              (when (and time-value-p
+                                         (>= (length value) 4))
+                                (if (numberp (nth 3 value))
+                                    ;; time-value-p is still t.
+                                    (when (> (nth 3 value) 0)
+                                      (setq fractional-seconds-p t))
+                                  (setq time-value-p nil)))
+                              time-value-p))
+                       ;; Value is a (current-time) style value, convert to the
+                       ;; ISO 8601-inspired XSD string format in UTC.
+                       (format-time-string
+                        (concat
+                         (ecase kind
+                           (dateTime "%Y-%m-%dT%H:%M:%S")
+                           (time "%H:%M:%S")
+                           (date "%Y-%m-%d")
+                           (gYearMonth "%Y-%m")
+                           (gYear "%Y")
+                           (gMonthDay "--%m-%d")
+                           (gDay "---%d")
+                           (gMonth "--%m"))
+                         (when fractional-seconds-p ".%N")
+                         ;; Internal time is always in UTC.
+                         "Z")
+                        value t))
+                      ((and (eq soap-time-format 'string)
+                            (stringp value))
+                       ;; Value is a string in the ISO 8601-inspired XSD
+                       ;; format.  Validate it.
+                       (soap-decode-date-time value kind)
                        (url-insert-entities-in-string value))
                       (t
-                       (error "Not a dateTime, date or time value"))))
+                       (case soap-time-format
+                         (string
+                          (error (concat "Not a dateTime, date or time value:"
+                                         " expected string format")))
+                         (internal
+                          (error (concat "Not a dateTime, date or time value:"
+                                         " expected internal time format")))
+                         (t
+                          (error (concat "Not a dateTime, date or time value:"
+                                         " unknown soap-time-format")))))))
                (boolean
                 (unless (memq value '(t nil))
                   (error "Not a boolean value"))
@@ -537,12 +602,29 @@ This is a specialization of `soap-encode-value' for
         (soap-validate-xs-basic-type value-string type)
         (insert value-string)))))
 
-(defun soap-decode-date-time (date-time-string)
+;; Inspired by rng-xsd-convert-date-time.
+(defun soap-decode-date-time (date-time-string kind)
   "Decode DATE-TIME-STRING, in ISO 8601 basic or extended format,
-and return a list in the same format as DECODE-TIME."
-  (let* ((datetime-regexp (cadr (get 'dateTime 'rng-xsd-convert)))
-         (unused (string-match datetime-regexp date-time-string))
-         (year-sign (match-string 1 date-time-string))
+and return a list in a format (SEC MINUTE HOUR DAY MONTH YEAR
+SEC-FRACTION DATATYPE ZONE).
+
+This format is meant to be similar to that returned by
+DECODE-TIME (and compatible with ENCODE-TIME).  The differences
+are the DOW (day-of-week) field is replaced with SEC-FRACTION, a
+float representing the fractional seconds, and the DST (daylight
+savings time) field is replaced with DATATYPE, a symbol
+representing the XSD primitive datatype.  This symbol can be used
+to determine which fields apply and which don't when it's not
+already clear from context.  For example a datatype of 'time
+means the year, month and day fields should be ignored.
+
+This function will throw an error if DATE-TIME-STRING represents
+a leap second, since the XML Schema 1.1 standard explicitly
+disallows them."
+  (let* ((datetime-regexp (cadr (get kind 'rng-xsd-convert)))
+         (year-sign (progn
+                      (string-match datetime-regexp date-time-string)
+                      (match-string 1 date-time-string)))
          (year (match-string 2 date-time-string))
          (month (match-string 3 date-time-string))
          (day (match-string 4 date-time-string))
@@ -559,8 +641,9 @@ and return a list in the same format as DECODE-TIME."
           (if year
               (* year-sign
                  (string-to-number year))
-            2000))
-    (if (equal year 2000) (message "yes"))
+            ;; By defaulting to the epoch date, a time value can be treated as
+            ;; a relative number of seconds.
+            1970))
     (setq month
           (if month (string-to-number month) 1))
     (setq day
@@ -589,15 +672,19 @@ and return a list in the same format as DECODE-TIME."
              (>= day 1) (<= day (rng-xsd-days-in-month year month))
              (>= hour 0) (<= hour 23)
              (>= minute 0) (<= minute 59)
-             ;; 60 represents a leap second.
-             (<= second 60)
+             ;; 60 represents a leap second, but leap seconds are explicitly
+             ;; disallowed by the XML Schema 1.1 specification.  This agrees
+             ;; with typical Emacs installations, which don't count leap
+             ;; seconds in time values.
+             (>= second 0) (<= second 59)
              (>= time-zone-hour 0)
              (<= time-zone-hour 23)
              (>= time-zone-minute 0)
              (<= time-zone-minute 59))
-      (error "Invalid or unsupported dateTime: %s" date-time-string))
-    ;; Return a value suitable for encode-time.
-    (list second minute hour day month year second-fraction nil
+      (error "Invalid or unsupported time: %s" date-time-string))
+    ;; Return a value in a format similar to that returned by decode-time, and
+    ;; suitable for (apply 'encode-time ...).
+    (list second minute hour day month year second-fraction kind
           (if has-time-zone
               (* (rng-xsd-time-to-seconds
                   time-zone-hour
@@ -642,7 +729,16 @@ This is a specialization of `soap-decode-type' for
         (ecase kind
           ((string anyURI QName ID IDREF language) (car contents))
           ((dateTime time date gYearMonth gYear gMonthDay gDay gMonth)
-           (soap-decode-date-time (car contents)))
+           (case soap-time-format
+             (string
+              (car contents))
+             (internal
+              (let ((decoded-time (soap-decode-date-time (car contents) kind)))
+                (time-add
+                 (apply 'encode-time decoded-time)
+                 (seconds-to-time (nth 6 decoded-time)))))
+             (t
+              (error "Time format %s is not supported" soap-time-format))))
           ((long short int integer
                  unsignedInt unsignedLong unsignedShort nonNegativeInteger
                  decimal byte float double duration)
