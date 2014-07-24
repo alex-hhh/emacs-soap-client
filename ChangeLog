@@ -1,3 +1,11 @@
+2014-07-24  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
+	* soap-client.el (soap-time-format): New variable.
+	(soap-encode-xs-basic-type): Handle dateTime, time, date,
+	gYearMonth, gYear, gMonthDay, gDay and gMonth.
+	(soap-decode-date-time): New function.
+	(soap-decode-xs-basic-type): Use soap-decode-date-time.
+
 2014-07-03  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
 
 	* soap-client.el (soap-encode-xs-basic-type): Validate value after
