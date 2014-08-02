@@ -990,7 +990,7 @@ This is a specialization of `soap-decode-type' for
           ;; Ignore whitespace.
           (unless (stringp child)
             ;; Ignore optional annotation.
-            ;; TODO: Implement anyAttribute support.
+            ;; Ignore anyAttribute nodes.
             (case (soap-l2wk (xml-node-name child))
               (xsd:attribute
                (push (soap-xs-parse-attribute child)
