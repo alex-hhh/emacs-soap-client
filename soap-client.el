@@ -439,6 +439,7 @@ An optional NAMESPACE-TAG can also be specified."
   (let ((ns (make-soap-namespace :name namespace-name)))
     (dolist (type '("string" "language" "ID" "IDREF"
                     "dateTime" "time" "date" "boolean"
+                    "gYearMonth" "gYear" "gMonthDay" "gDay" "gMonth"
                     "long" "short" "int" "integer" "nonNegativeInteger"
                     "unsignedLong" "unsignedShort" "unsignedInt"
                     "decimal" "duration"

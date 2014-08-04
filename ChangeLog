@@ -1,3 +1,8 @@
+2014-08-04  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
+	* soap-client.el (soap-make-xs-basic-types): Add gYearMonth,
+	gYear, gMonthDay, gDay and gMonth.
+
 2014-07-24  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
 
 	* soap-client.el (soap-time-format): New variable.
