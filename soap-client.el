@@ -1069,6 +1069,7 @@ See also `soap-wsdl-resolve-references'."
                     ; means no min range, (l . nil) means no max range.
   integer-range     ; a pair of (min, max) integer values, inclusive range,
                     ; same meaning as `length-range'
+  is-list           ; t if this is an xs:list, nil otherwise
   )
 
 (defun soap-xs-parse-simple-type (node)
@@ -1091,7 +1092,7 @@ See also `soap-wsdl-resolve-references'."
         (xsd:restriction (soap-xs-add-restriction def type))
         (xsd:extension (soap-xs-add-extension def type))
         (xsd:union (soap-xs-add-union def type))
-        (xsd:list nil))                 ; TODO: add support for this
+        (xsd:list (soap-xs-add-list def type)))
 
       type)))
 
@@ -1179,6 +1180,31 @@ See also `soap-wsdl-resolve-references'."
       (push (soap-xs-parse-simple-type simple-type) result))
     (setf (soap-xs-simple-type-base type)
           (append (soap-xs-simple-type-base type) (nreverse result)))))
+
+(defun soap-xs-add-list (node type)
+  "Add list defined in XML NODE to TYPE, a `soap-xs-simple-type'."
+  (assert (eq (soap-l2wk (xml-node-name node)) 'xsd:list)
+          nil
+          "expecting xsd:list node, got %s" (soap-l2wk (xml-node-name node)))
+
+  ;; A simple type can be defined inline inside the list node or referenced by
+  ;; the itemType attribute, in which case it will be resolved by the
+  ;; resolve-references method.
+  (let* ((item-type (xml-get-attribute-or-nil node 'itemType))
+         (children (soap-xml-get-children1 node 'xsd:simpleType)))
+    (if item-type
+        (if (= (length children) 0)
+            (setf (soap-xs-simple-type-base type) (soap-l2fq item-type))
+          (soap-warning
+           "xsd:list node with itemType has more than zero children: %s"
+           (soap-xs-type-name type)))
+      (if (= (length children) 1)
+          (setf (soap-xs-simple-type-base type)
+                (soap-xs-parse-simple-type
+                 (car (soap-xml-get-children1 node 'xsd:simpleType))))
+        (soap-warning "xsd:list node has more than one child %s"
+                      (soap-xs-type-name type))))
+    (setf (soap-xs-simple-type-is-list type) t)))
 
 (defun soap-xs-add-extension (node type)
   "Add the extended type defined in XML NODE to TYPE, an `soap-xs-simple-type'."
@@ -1323,6 +1349,7 @@ position.
 
 This is a specialization of `soap-encode-value' for
 `soap-xs-simple-type' objects."
+  ;; TODO: Encode xs:list values.
   (soap-validate-xs-simple-type value type)
   (soap-encode-value value (soap-xs-simple-type-base type)))
 
@@ -1333,6 +1360,7 @@ type-info stored in TYPE.
 
 This is a specialization of `soap-decode-type' for
 `soap-xs-simple-type' objects."
+  ;; TODO: Decode xs:list values.
   (let ((value (soap-decode-type (soap-xs-simple-type-base type) node)))
     (soap-validate-xs-simple-type value type)))
 
