@@ -1,5 +1,10 @@
 2014-08-17  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
 
+	* soap-client.el (soap-get-candidate-elements): Fix reference
+	handling.
+
+2014-08-17  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
 	* soap-client.el (soap-xs-simple-type): Add is-list slot.
 	(soap-xs-parse-simple-type): Call soap-xs-add-list for xsd:list
 	nodes.
