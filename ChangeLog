@@ -1,3 +1,8 @@
+2014-08-17  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
+	* soap-client.el (soap-encode-xs-element): When a boolean is
+	expected, interpret nil as "false".
+
 2014-08-04  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
 
 	* soap-client.el (soap-make-xs-basic-types): Add gYearMonth,

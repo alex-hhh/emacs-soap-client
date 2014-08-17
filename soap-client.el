@@ -921,7 +921,10 @@ This is a specialization of `soap-encode-value' for
           (progn
             (insert "<" fq-name)
             (soap-encode-attributes value type)
-            (if value
+            ;; If value is nil and type is boolean encode the value as "false".
+            ;; Otherwise don't encode the value.
+            (if (or value (and (soap-xs-basic-type-p type)
+                               (eq (soap-xs-basic-type-kind type) 'boolean)))
                 (progn (insert ">")
                        (soap-encode-value value type)
                        (insert "</" fq-name ">\n"))
