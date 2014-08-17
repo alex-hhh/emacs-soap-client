@@ -1573,15 +1573,15 @@ This is a specialization of `soap-encode-attributes' for
 (defun soap-get-candidate-elements (element)
   "Return a list of elements that are compatible with ELEMENT,
 including ELEMENT's references and alternatives."
-  ;; Append the element itself and its alternatives.
-  (append (list element)
-          (soap-xs-element-alternatives element)
-          ;; If the element is a reference, append the reference and its
-          ;; alternatives.
-          (let ((reference (soap-xs-element-reference element)))
-            (when reference
-              (append (list reference)
-                      (soap-xs-element-alternatives reference))))))
+  (let ((reference (soap-xs-element-reference element)))
+    ;; If the element is a reference, append the reference and its
+    ;; alternatives...
+    (if reference
+        (append (list reference)
+                (soap-xs-element-alternatives reference))
+      ;; ...otherwise append the element itself and its alternatives.
+      (append (list element)
+              (soap-xs-element-alternatives element)))))
 
 (defun soap-encode-xs-complex-type (value type)
   "Encode the VALUE according to TYPE.
