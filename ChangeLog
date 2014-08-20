@@ -1,5 +1,10 @@
 2014-08-20  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
 
+	* soap-client.el (soap-decode-type): Check that multiRef matched
+	validation regexp.
+
+2014-08-20  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
 	* soap-client.el (soap-encode-xs-simple-type): Encode xsd:list
 	nodes.
 	(soap-decode-xs-simple-type): Decode xsd:list nodes.
