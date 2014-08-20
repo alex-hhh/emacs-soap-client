@@ -2583,7 +2583,8 @@ decode function to perform the actual decoding."
                (when decoded
                  (throw 'done decoded)))
 
-             (string-match "^#\\(.*\\)$" href) ; TODO: check that it matched
+             (unless (string-match "^#\\(.*\\)$" href)
+               (error "Invalid multiRef: %s" href))
 
              (let ((id (match-string 1 href)))
                (dolist (mr soap-multi-refs)
