@@ -1349,9 +1349,14 @@ position.
 
 This is a specialization of `soap-encode-value' for
 `soap-xs-simple-type' objects."
-  ;; TODO: Encode xs:list values.
   (soap-validate-xs-simple-type value type)
-  (soap-encode-value value (soap-xs-simple-type-base type)))
+  (if (soap-xs-simple-type-is-list type)
+      (progn
+        (dolist (v (butlast value))
+          (soap-encode-value v (soap-xs-simple-type-base type))
+          (insert " "))
+        (soap-encode-value (car (last value)) (soap-xs-simple-type-base type)))
+    (soap-encode-value value (soap-xs-simple-type-base type))))
 
 (defun soap-decode-xs-simple-type (type node)
   "Use TYPE, a `soap-xs-simple-type', to decode the contents of NODE.
@@ -1360,9 +1365,12 @@ type-info stored in TYPE.
 
 This is a specialization of `soap-decode-type' for
 `soap-xs-simple-type' objects."
-  ;; TODO: Decode xs:list values.
-  (let ((value (soap-decode-type (soap-xs-simple-type-base type) node)))
-    (soap-validate-xs-simple-type value type)))
+  (if (soap-xs-simple-type-is-list type)
+      ;; Technically, we could construct fake XML NODEs and pass them to
+      ;; soap-decode-value...
+      (split-string (car (xml-node-children node)))
+    (let ((value (soap-decode-type (soap-xs-simple-type-base type) node)))
+      (soap-validate-xs-simple-type value type))))
 
 ;; Register methods for `soap-xs-simple-type'
 (let ((tag (aref (make-soap-xs-simple-type) 0)))
