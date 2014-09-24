@@ -1913,7 +1913,8 @@ Return a SOAP-NAMESPACE containing the elements."
             (xsd:import
              ;; Imports will be processed later
              ;; NOTE: we should expand the location now!
-             (let ((location (xml-get-attribute-or-nil def 'schemaLocation)))
+             (let ((location (or (xml-get-attribute-or-nil def 'schemaLocation)
+                                 (xml-get-attribute-or-nil def 'location))))
                (when location
                  (push location soap-xmlschema-imports))))
             (xsd:element
