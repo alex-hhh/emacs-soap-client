@@ -1802,7 +1802,7 @@ This is a specialization of `soap-decode-type' for
                                 (if use-fq-names
                                     ;; Find relevant children using local
                                     ;; namespaces by searching for the element's
-                                    ;; full-qualified name.
+                                    ;; fully-qualified name.
                                     (soap-xml-get-children-fq
                                      node
                                      (soap-xs-element-get-fq-name
@@ -1854,7 +1854,15 @@ This is a specialization of `soap-decode-type' for
              (dolist (node children)
                (incf instance-count)
                (let* ((attributes (soap-decode-xs-attributes element-type node))
-                      (decoded-child (soap-decode-type element node)))
+                      ;; Attributes may specify xsi:type override.
+                      (element-type
+                       (if (soap-xml-get-attribute-or-nil1 node 'xsi:type)
+                           (soap-wsdl-get
+                            (soap-l2fq
+                             (soap-xml-get-attribute-or-nil1 node 'xsi:type))
+                            soap-current-wsdl 'soap-xs-type-p t)
+                         element-type))
+                      (decoded-child (soap-decode-type element-type node)))
                  (if e-name
                      (push (cons (intern e-name)
                                  (append attributes decoded-child)) result)
@@ -2658,7 +2666,8 @@ decode function to perform the actual decoding."
         ;; Type is in the format "someType[NUM]" where NUM is the number of
         ;; elements in the array.  We discard the [NUM] part.
         (setq type (replace-regexp-in-string "\\[[0-9]+\\]\\'" "" type))
-        (setq wtype (soap-wsdl-get type soap-current-wsdl 'soap-xs-type-p))
+        (setq wtype (soap-wsdl-get (soap-l2fq type)
+                                   soap-current-wsdl 'soap-xs-type-p))
         (unless wtype
           ;; The node has type info encoded in it, but we don't know how to
           ;; decode it...
