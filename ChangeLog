@@ -1,3 +1,9 @@
+2014-09-24  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
+	* soap-client.el (soap-decode-xs-complex-type): Support xsi:type
+	override attribute.
+	(soap-decode-array): Likewise.
+
 2014-09-23  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
 
 	* soap-client.el (soap-parse-schema): Handle location attribute.
