@@ -1,3 +1,13 @@
+2014-11-11  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
+	* soap-client.el (soap-well-known-xmlns): Add wsa and wsaw tags.
+	(soap-operation): Add input-action and output-action slots.
+	(soap-parse-operation): Parse wsaw:Action nodes.
+	(soap-encode-body): Encode service-url for WS-Addressing.
+	(soap-create-envelope): Likewise.
+	(soap-invoke): Update soap-create-envelope call to provide
+	service-url argument.
+
 2014-09-24  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
 
 	* soap-client.el (soap-decode-xs-complex-type): Support xsi:type
