@@ -75,6 +75,8 @@
     ("wsdlsoap" . "http://schemas.xmlsoap.org/wsdl/soap/")
     ("xsd" . "http://www.w3.org/2001/XMLSchema")
     ("xsi" . "http://www.w3.org/2001/XMLSchema-instance")
+    ("wsa" . "http://www.w3.org/2005/08/addressing")
+    ("wsaw" . "http://www.w3.org/2006/05/addressing/wsdl")
     ("soap" . "http://schemas.xmlsoap.org/soap/envelope/")
     ("soap12" . "http://schemas.xmlsoap.org/wsdl/soap12/")
     ("http" . "http://schemas.xmlsoap.org/wsdl/http/")
@@ -1949,7 +1951,9 @@ Return a SOAP-NAMESPACE containing the elements."
   parameter-order
   input                                 ; (NAME . MESSAGE)
   output                                ; (NAME . MESSAGE)
-  faults)                               ; a list of (NAME . MESSAGE)
+  faults                                ; a list of (NAME . MESSAGE)
+  input-action                          ; WS-addressing action string
+  output-action)                        ; WS-addressing action string
 
 (defstruct (soap-port-type (:include soap-element))
   operations)                           ; a namespace of operations
@@ -2482,19 +2486,23 @@ traverse an element tree."
   (let ((name (xml-get-attribute node 'name))
         (parameter-order (split-string
                           (xml-get-attribute node 'parameterOrder)))
-        input output faults)
+        input output faults input-action output-action)
     (dolist (n (xml-node-children node))
       (when (consp n)                 ; skip string nodes which are whitespace
         (let ((node-name (soap-l2wk (xml-node-name n))))
           (cond
             ((eq node-name 'wsdl:input)
              (let ((message (xml-get-attribute n 'message))
-                   (name (xml-get-attribute n 'name)))
-               (setq input (cons name (soap-l2fq message 'tns)))))
+                   (name (xml-get-attribute n 'name))
+                   (action (soap-xml-get-attribute-or-nil1 n 'wsaw:Action)))
+               (setq input (cons name (soap-l2fq message 'tns)))
+               (setq input-action action)))
             ((eq node-name 'wsdl:output)
              (let ((message (xml-get-attribute n 'message))
-                   (name (xml-get-attribute n 'name)))
-               (setq output (cons name (soap-l2fq message 'tns)))))
+                   (name (xml-get-attribute n 'name))
+                   (action (soap-xml-get-attribute-or-nil1 n 'wsaw:Action)))
+               (setq output (cons name (soap-l2fq message 'tns)))
+               (setq output-action action)))
             ((eq node-name 'wsdl:fault)
              (let ((message (xml-get-attribute n 'message))
                    (name (xml-get-attribute n 'name)))
@@ -2505,7 +2513,9 @@ traverse an element tree."
      :parameter-order parameter-order
      :input input
      :output output
-     :faults (nreverse faults))))
+     :faults (nreverse faults)
+     :input-action input-action
+     :output-action output-action)))
 
 (defun soap-parse-binding (node)
   "Parse NODE as a wsdl:binding and return the corresponding type."
@@ -2829,12 +2839,13 @@ work."
   (when (soap-element-namespace-tag type)
     (add-to-list 'soap-encoded-namespaces (soap-element-namespace-tag type))))
 
-(defun soap-encode-body (operation parameters _wsdl)
+(defun soap-encode-body (operation parameters _wsdl &optional service-url)
   "Create the body of a SOAP request for OPERATION in the current buffer.
 PARAMETERS is a list of parameters supplied to the OPERATION.
 
 The OPERATION and PARAMETERS are encoded according to the WSDL
-document."
+document.  SERVICE-URL should be provided when WS-Addressing is
+being used."
   (let* ((op (soap-bound-operation-operation operation))
          (use (soap-bound-operation-use operation))
          (message (cdr (soap-operation-input op)))
@@ -2853,9 +2864,14 @@ document."
     ;; in any way. We should find a way to supply parameters to the headers or
     ;; remove the requirement to pass nil for these arguments.
 
-    (let ((headers (soap-bound-operation-soap-headers operation)))
+    (let ((headers (soap-bound-operation-soap-headers operation))
+          (input-action (soap-operation-input-action op)))
       (when headers
         (insert "<soap:Header>\n")
+        (when input-action
+          (add-to-list 'soap-encoded-namespaces "wsa")
+          (insert "<wsa:Action>" input-action "</wsa:Action>\n")
+          (insert "<wsa:To>" service-url "</wsa:To>\n"))
         (dolist (h headers)
           (let* ((message (nth 0 h))
                  (part (assq (nth 1 h) (soap-message-parts message)))
@@ -2889,15 +2905,16 @@ document."
       (insert "</" (soap-element-fq-name op) ">\n"))
     (insert "</soap:Body>\n")))
 
-(defun soap-create-envelope (operation parameters wsdl)
+(defun soap-create-envelope (operation parameters wsdl &optional service-url)
   "Create a SOAP request envelope for OPERATION using PARAMETERS.
-WSDL is the wsdl document used to encode the PARAMETERS."
+WSDL is the wsdl document used to encode the PARAMETERS.
+SERVICE-URL should be provided when WS-Addressing is being used."
   (with-temp-buffer
     (let ((soap-encoded-namespaces '("xsi" "soap" "soapenc"))
           (use (soap-bound-operation-use operation)))
 
       ;; Create the request body
-      (soap-encode-body operation parameters wsdl)
+      (soap-encode-body operation parameters wsdl service-url)
 
       ;; Put the envelope around the body
       (goto-char (point-min))
@@ -2962,7 +2979,8 @@ operations in a WSDL document."
             (url-request-data
              ;; url-request-data expects a unibyte string already encoded...
              (encode-coding-string
-              (soap-create-envelope operation parameters wsdl)
+              (soap-create-envelope operation parameters wsdl
+                                    (soap-port-service-url port))
               'utf-8))
             (url-mime-charset-string "utf-8;q=1, iso-8859-1;q=0.5")
             (url-http-attempt-keepalives t)
