@@ -2875,7 +2875,7 @@ being used."
         (dolist (h headers)
           (let* ((message (nth 0 h))
                  (part (assq (nth 1 h) (soap-message-parts message)))
-                 (value (cdr (assoc (car part) param-table)))
+                 (value (cdr (assoc (car part) (car parameters))))
                  (use (nth 2 h))
                  (element (cdr part)))
             (when (eq use 'encoded)
