@@ -1872,6 +1872,8 @@ This is a specialization of `soap-decode-type' for
                    ;; level of nesting, so we splice the decoding into result.
                    (setq result (append decoded-child result)))))
              (cond ((and (eq (soap-xs-complex-type-indicator type) 'choice)
+                         ;; Choices can allow multiple values.
+                         (not (soap-xs-complex-type-multiple-p type))
                          (> instance-count 0))
                     ;; This was a choice node, and we decoded one value.
                     (throw 'done t))
