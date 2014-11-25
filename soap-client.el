@@ -2977,7 +2977,6 @@ operations in a WSDL document."
       (let ((url-request-method "POST")
             (url-package-name "soap-client.el")
             (url-package-version "1.0")
-            (url-http-version "1.0")
             (url-request-data
              ;; url-request-data expects a unibyte string already encoded...
              (encode-coding-string
