@@ -771,7 +771,8 @@ This is a specialization of `soap-decode-type' for
   substitution-group
   ;; contains a list of elements who point to this one via their
   ;; substitution-group slot
-  alternatives)
+  alternatives
+  is-group)
 
 (defun soap-xs-element-type (element)
   "Retrieve the type of ELEMENT.
@@ -794,15 +795,16 @@ contains a reference, we retrive the type of the reference."
 
 (defun soap-xs-parse-element (node)
   "Construct a `soap-xs-element' from NODE."
-  (assert (eq (soap-l2wk (xml-node-name node)) 'xsd:element)
-          "expecting xsd:element, got %s" (soap-l2wk (xml-node-name node)))
   (let ((name (xml-get-attribute-or-nil node 'name))
         (id (xml-get-attribute-or-nil node 'id))
         (type (xml-get-attribute-or-nil node 'type))
         (optional? (soap-node-optional node))
         (multiple? (soap-node-multiple node))
         (ref (xml-get-attribute-or-nil node 'ref))
-        (substitution-group (xml-get-attribute-or-nil node 'substitutionGroup)))
+        (substitution-group (xml-get-attribute-or-nil node 'substitutionGroup))
+        (node-name (soap-l2wk (xml-node-name node))))
+    (assert (memq node-name '(xsd:element xsd:group))
+            "expecting xsd:element or xsd:group, got %s" node-name)
 
     (when type
       (setq type (soap-l2fq type 'tns)))
@@ -834,7 +836,8 @@ contains a reference, we retrive the type of the reference."
                           :id id :type^ type
                           :optional? optional? :multiple? multiple?
                           :reference ref
-                          :substitution-group substitution-group)))
+                          :substitution-group substitution-group
+                          :is-group (eq node-name 'xsd:group))))
 
 (defun soap-resolve-references-for-xs-element (element wsdl)
   "Replace names in ELEMENT with the referenced objects in the WSDL.
@@ -858,7 +861,11 @@ See also `soap-wsdl-resolve-references'."
            ;; else, so we must resolve references now.
            (soap-resolve-references type wsdl))))
   (let ((reference (soap-xs-element-reference element)))
-    (when (soap-name-p reference)
+    (when (and (soap-name-p reference)
+               ;; xsd:group reference nodes will be converted to inline types
+               ;; by soap-resolve-references-for-xs-complex-type, so skip them
+               ;; here.
+               (not (soap-xs-element-is-group element)))
       (setf (soap-xs-element-reference element)
             (soap-wsdl-get reference wsdl 'soap-xs-element-p))))
 
@@ -1388,20 +1395,20 @@ This is a specialization of `soap-decode-type' for
   base
   elements
   optional?
-  multiple?)
+  multiple?
+  is-group)
 
 (defun soap-xs-parse-complex-type (node)
   "Construct a `soap-xs-complex-type' by parsing the XML NODE."
-  (assert (memq (soap-l2wk (xml-node-name node))
-                '(xsd:complexType xsd:complexContent))
-          nil
-          "unexpected node: %s" (soap-l2wk (xml-node-name node)))
-
   (let ((name (xml-get-attribute-or-nil node 'name))
         (id (xml-get-attribute-or-nil node 'id))
+        (node-name (soap-l2wk (xml-node-name node)))
         type
         attributes
         attribute-groups)
+    (assert (memq node-name '(xsd:complexType xsd:complexContent xsd:group))
+            nil "unexpected node: %s" node-name)
+
     (dolist (def (xml-node-children node))
       (when (consp def)                 ; skip text nodes
         (case (soap-l2wk (xml-node-name def))
@@ -1436,6 +1443,9 @@ This is a specialization of `soap-decode-type' for
           (append attributes (soap-xs-type-attributes type)))
     (setf (soap-xs-type-attribute-groups type)
           (append attribute-groups (soap-xs-type-attribute-groups type)))
+    (when (soap-xs-complex-type-p type)
+      (setf (soap-xs-complex-type-is-group type)
+            (eq node-name 'xsd:group)))
     type))
 
 (defun soap-xs-parse-sequence (node)
@@ -1460,7 +1470,7 @@ Returns a `soap-xs-complex-type'"
     (dolist (r (xml-node-children node))
       (unless (stringp r)                 ; skip the white space
         (case (soap-l2wk (xml-node-name r))
-          (xsd:element
+          ((xsd:element xsd:group)
            (push (soap-xs-parse-element r)
                  (soap-xs-complex-type-elements type)))
           ((xsd:sequence xsd:choice xsd:all)
@@ -1545,8 +1555,26 @@ See also `soap-wsdl-resolve-references'."
                  (soap-wsdl-get base wsdl 'soap-xs-type-p)))
           ((soap-xs-type-p base)
            (soap-resolve-references base wsdl))))
-  (dolist (element (soap-xs-complex-type-elements type))
-    (soap-resolve-references element wsdl))
+  (let (all-elements)
+    (dolist (element (soap-xs-complex-type-elements type))
+      (if (soap-xs-element-is-group element)
+          ;; This is an xsd:group element that references an xsd:group node,
+          ;; which we treat as a complex type.  We replace the reference
+          ;; element by inlining the elements of the referenced xsd:group
+          ;; (complex type) node.
+          (let ((type (soap-wsdl-get
+                       (soap-xs-element-reference element)
+                       wsdl (lambda (type)
+                              (and
+                               (soap-xs-complex-type-p type)
+                               (soap-xs-complex-type-is-group type))))))
+            (dolist (element (soap-xs-complex-type-elements type))
+              (soap-resolve-references element wsdl)
+              (push element all-elements)))
+        ;; This is a non-xsd:group node so just add it directly.
+        (soap-resolve-references element wsdl)
+        (push element all-elements)))
+    (setf (soap-xs-complex-type-elements type) (nreverse all-elements)))
   (dolist (attribute-group (soap-xs-type-attribute-groups type))
     (soap-resolve-references attribute-group wsdl)))
 
@@ -1937,7 +1965,7 @@ Return a SOAP-NAMESPACE containing the elements."
              (soap-namespace-put (soap-xs-parse-attribute-group def) ns))
             (xsd:simpleType
              (soap-namespace-put (soap-xs-parse-simple-type def) ns))
-            (xsd:complexType
+            ((xsd:complexType xsd:group)
              (soap-namespace-put (soap-xs-parse-complex-type def) ns)))))
       ns)))
 
