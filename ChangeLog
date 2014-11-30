@@ -1,3 +1,15 @@
+2014-11-29  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
+	* soap-client.el (soap-xs-element): Add is-group slot.
+	(soap-xs-parse-element): Set is-group slot.
+	(soap-resolve-references-for-xs-element): Skip is-group elements.
+	(soap-xs-complex-type): Add is-group slot.
+	(soap-xs-parse-complex-type): Set is-group slot.
+	(soap-xs-parse-sequence): Parse xsd:group elements.
+	(soap-resolve-references-for-xs-complex-type): Inline elements
+	from referenced xsd:group nodes.
+	(soap-parse-schema): Parse xsd:group nodes.
+
 2014-11-25  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
 
 	* soap-client.el (soap-invoke): Don't set url-http-version to 1.0.
