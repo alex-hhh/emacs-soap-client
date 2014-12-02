@@ -1,5 +1,13 @@
 2014-12-01  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
 
+	* soap-client.el (soap-xmlschema-imports): Remove variable.
+	(soap-parse-schema): Add wsdl argument.  Look up XML schema
+	imports from wsdl.
+	(soap-load-wsdl): Do not set soap-xmlschema-imports.
+	(soap-parse-wsdl): Get XML schema imports from wsdl.
+
+2014-12-01  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
 	* soap-client.el (soap-current-file): Remove variable.
 	(soap-wsdl): Add current-file slot.
 	(soap-fetch-xml-from-url): Add wsdl argument.  Look up current
