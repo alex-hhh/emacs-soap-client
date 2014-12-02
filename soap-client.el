@@ -121,11 +121,6 @@ SOAP-TIME-FORMAT is meant to be bound dynamically around
 soap-client calls.  It defaults to 'string for
 backward-compatibility.")
 
-(defvar soap-xmlschema-imports nil
-  "A list of additional XSD schema files to load.
-This is filled from <xsd:import> statememts while parsing a WSDL
-document.  Only valid while a WSDL document is loaded.")
-
 (defvar soap-current-wsdl nil
   "The current WSDL document used when decoding the SOAP response.
 This is a dynamically bound variable.")
@@ -1930,41 +1925,6 @@ This is a specialization of `soap-decode-type' for
   (put tag 'soap-encoder #'soap-encode-xs-complex-type)
   (put tag 'soap-decoder #'soap-decode-xs-complex-type))
 
-;;;;; soap-parse-schema
-
-(defun soap-parse-schema (node)
-  "Parse a schema NODE.
-Return a SOAP-NAMESPACE containing the elements."
-  (soap-with-local-xmlns node
-    (assert (eq (soap-l2wk (xml-node-name node)) 'xsd:schema)
-            nil
-            "expecting an xsd:schema node, got %s"
-            (soap-l2wk (xml-node-name node)))
-
-    (let ((ns (make-soap-namespace :name (soap-get-target-namespace node))))
-
-      (dolist (def (xml-node-children node))
-        (unless (stringp def)           ; skip text nodes
-          (case (soap-l2wk (xml-node-name def))
-            (xsd:import
-             ;; Imports will be processed later
-             ;; NOTE: we should expand the location now!
-             (let ((location (or (xml-get-attribute-or-nil def 'schemaLocation)
-                                 (xml-get-attribute-or-nil def 'location))))
-               (when location
-                 (push location soap-xmlschema-imports))))
-            (xsd:element
-             (soap-namespace-put (soap-xs-parse-element def) ns))
-            (xsd:attribute
-             (soap-namespace-put (soap-xs-parse-attribute def) ns))
-            (xsd:attributeGroup
-             (soap-namespace-put (soap-xs-parse-attribute-group def) ns))
-            (xsd:simpleType
-             (soap-namespace-put (soap-xs-parse-simple-type def) ns))
-            ((xsd:complexType xsd:group)
-             (soap-namespace-put (soap-xs-parse-complex-type def) ns)))))
-      ns)))
-
 ;;;; WSDL documents
 ;;;;; WSDL document elements
 
@@ -2014,6 +1974,7 @@ Return a SOAP-NAMESPACE containing the elements."
              (:copier soap-copy-wsdl))
   origin                         ; file or URL from which this wsdl was loaded
   current-file                   ; most-recently fetched file or URL
+  xmlschema-imports              ; a list of schema imports
   ports                          ; a list of SOAP-PORT instances
   alias-table                    ; a list of namespace aliases
   namespaces                     ; a list of namespaces
@@ -2127,6 +2088,41 @@ used to resolve the namespace alias."
         ;; NOTE: don't use the local alias table here
         (soap-wsdl-get (soap-namespace-link-target element) wsdl predicate)
         element)))
+
+;;;;; soap-parse-schema
+
+(defun soap-parse-schema (node wsdl)
+  "Parse a schema NODE.
+Return a SOAP-NAMESPACE containing the elements."
+  (soap-with-local-xmlns node
+    (assert (eq (soap-l2wk (xml-node-name node)) 'xsd:schema)
+            nil
+            "expecting an xsd:schema node, got %s"
+            (soap-l2wk (xml-node-name node)))
+
+    (let ((ns (make-soap-namespace :name (soap-get-target-namespace node))))
+
+      (dolist (def (xml-node-children node))
+        (unless (stringp def)           ; skip text nodes
+          (case (soap-l2wk (xml-node-name def))
+            (xsd:import
+             ;; Imports will be processed later
+             ;; NOTE: we should expand the location now!
+             (let ((location (or (xml-get-attribute-or-nil def 'schemaLocation)
+                                 (xml-get-attribute-or-nil def 'location))))
+               (when location
+                 (push location (soap-wsdl-xmlschema-imports wsdl)))))
+            (xsd:element
+             (soap-namespace-put (soap-xs-parse-element def) ns))
+            (xsd:attribute
+             (soap-namespace-put (soap-xs-parse-attribute def) ns))
+            (xsd:attributeGroup
+             (soap-namespace-put (soap-xs-parse-attribute-group def) ns))
+            (xsd:simpleType
+             (soap-namespace-put (soap-xs-parse-simple-type def) ns))
+            ((xsd:complexType xsd:group)
+             (soap-namespace-put (soap-xs-parse-complex-type def) ns)))))
+      ns)))
 
 ;;;;; Resolving references for wsdl types
 
@@ -2361,8 +2357,6 @@ traverse an element tree."
 
 (defun soap-load-wsdl (file-or-url &optional wsdl)
   "Load a WSDL document from FILE-OR-URL and return it."
-  (unless wsdl
-    (setq soap-xmlschema-imports nil))
   (let* ((wsdl (or wsdl (soap-make-wsdl file-or-url)))
          (xml (soap-fetch-xml file-or-url wsdl)))
     (soap-wsdl-resolve-references (soap-parse-wsdl xml wsdl))
@@ -2400,12 +2394,12 @@ traverse an element tree."
         (when (consp node)
           (soap-with-local-xmlns node
             (when (eq (soap-l2wk (xml-node-name node)) 'xsd:schema)
-              (soap-wsdl-add-namespace (soap-parse-schema node) wsdl))))))
+              (soap-wsdl-add-namespace (soap-parse-schema node wsdl) wsdl))))))
 
-    (while soap-xmlschema-imports
-      (let ((import (pop soap-xmlschema-imports)))
-        (let ((xml (soap-fetch-xml import wsdl)))
-              (soap-wsdl-add-namespace (soap-parse-schema xml) wsdl))))
+    (while (soap-wsdl-xmlschema-imports wsdl)
+      (let* ((import (pop (soap-wsdl-xmlschema-imports wsdl)))
+             (xml (soap-fetch-xml import wsdl)))
+        (soap-wsdl-add-namespace (soap-parse-schema xml wsdl) wsdl)))
 
     (let ((ns (make-soap-namespace :name (soap-get-target-namespace node))))
       (dolist (node (soap-xml-get-children1 node 'wsdl:message))
