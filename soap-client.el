@@ -2312,6 +2312,19 @@ traverse an element tree."
 
 ;;;;; Loading WSDL from XML documents
 
+(defun soap-process-url-response (buffer)
+  "Parse the XML contents of BUFFER."
+  (let ((mime-part (mm-dissect-buffer t t)))
+    (unless mime-part
+      (error "Failed to decode response from server"))
+    (unless (equal (car (mm-handle-type mime-part)) "text/xml")
+      (error "Server response is not an XML document"))
+    (with-temp-buffer
+      (mm-insert-part mime-part)
+      (prog1
+          (car (xml-parse-region (point-min) (point-max)))
+        (kill-buffer buffer)))))
+
 (defun soap-fetch-xml-from-url (url wsdl)
   "Load an XML document from URL and return it."
   (message "Fetching from %s" url)
@@ -2327,16 +2340,7 @@ traverse an element tree."
         (declare (special url-http-response-status))
         (if (> url-http-response-status 299)
             (error "Error retrieving WSDL: %s" url-http-response-status))
-        (let ((mime-part (mm-dissect-buffer t t)))
-          (unless mime-part
-            (error "Failed to decode response from server"))
-          (unless (equal (car (mm-handle-type mime-part)) "text/xml")
-            (error "Server response is not an XML document"))
-          (with-temp-buffer
-            (mm-insert-part mime-part)
-            (prog1
-                (car (xml-parse-region (point-min) (point-max)))
-              (kill-buffer buffer))))))))
+        (soap-process-url-response (current-buffer))))))
 
 (defun soap-fetch-xml-from-file (file wsdl)
   "Load an XML document from FILE and return it."
@@ -2367,28 +2371,27 @@ traverse an element tree."
 
 (defalias 'soap-load-wsdl-from-url 'soap-load-wsdl)
 
-(defun soap-parse-wsdl (node wsdl)
-  "Construct a WSDL structure from NODE, which is an XML document."
+(defun soap-parse-wsdl-phase-1 (node)
+  "Assert that NODE is valid."
   (soap-with-local-xmlns node
+    (let ((node-name (soap-l2wk (xml-node-name node))))
+      (assert (eq node-name 'wsdl:definitions)
+              nil
+              "expecting wsdl:definitions node, got %s" node-name))))
 
-    (assert (eq (soap-l2wk (xml-node-name node)) 'wsdl:definitions)
-            nil
-            "expecting wsdl:definitions node, got %s"
-            (soap-l2wk (xml-node-name node)))
-
-    ;; Add the local alias table to the wsdl document -- it will be used for
-    ;; all types in this document even after we finish parsing it.
-    ;; (dolist (alias soap-local-xmlns)
-    ;;   (soap-wsdl-add-alias (car alias) (cdr alias) wsdl))
-
+(defun soap-parse-wsdl-phase-2 (node wsdl)
+  "Load files imported by NODE into WSDL."
+  (soap-with-local-xmlns node
     (dolist (node (soap-xml-get-children1 node 'wsdl:import))
       (let ((location (xml-get-attribute-or-nil node 'location)))
         (when location
-          (soap-load-wsdl location wsdl))))
+          (soap-load-wsdl location wsdl))))))
 
+(defun soap-parse-wsdl-phase-3 (node wsdl)
+  "Load types found in NODE into WSDL."
+  (soap-with-local-xmlns node
     ;; Find all the 'xsd:schema nodes which are children of wsdl:types nodes
-    ;; and build our type-library
-
+    ;; and build our type-library.
     (let ((types (car (soap-xml-get-children1 node 'wsdl:types))))
       (dolist (node (xml-node-children types))
         ;; We cannot use (xml-get-children node (soap-wk2l 'xsd:schema))
@@ -2397,13 +2400,20 @@ traverse an element tree."
         (when (consp node)
           (soap-with-local-xmlns node
             (when (eq (soap-l2wk (xml-node-name node)) 'xsd:schema)
-              (soap-wsdl-add-namespace (soap-parse-schema node wsdl) wsdl))))))
+              (soap-wsdl-add-namespace (soap-parse-schema node wsdl)
+                                       wsdl))))))))
 
+(defun soap-parse-wsdl-phase-4 (node wsdl)
+  "Fetch schema imports defined by NODE into WSDL."
+  (soap-with-local-xmlns node
     (while (soap-wsdl-xmlschema-imports wsdl)
       (let* ((import (pop (soap-wsdl-xmlschema-imports wsdl)))
              (xml (soap-fetch-xml import wsdl)))
-        (soap-wsdl-add-namespace (soap-parse-schema xml wsdl) wsdl)))
+        (soap-wsdl-add-namespace (soap-parse-schema xml wsdl) wsdl)))))
 
+(defun soap-parse-wsdl-phase-5 (node wsdl)
+  "Finish parsing NODE into WSDL."
+  (soap-with-local-xmlns node
     (let ((ns (make-soap-namespace :name (soap-get-target-namespace node))))
       (dolist (node (soap-xml-get-children1 node 'wsdl:message))
         (soap-namespace-put (soap-parse-message node) ns))
@@ -2430,10 +2440,16 @@ traverse an element tree."
               (soap-namespace-put port ns)
               (push port (soap-wsdl-ports wsdl))))))
 
-      (soap-wsdl-add-namespace ns wsdl))
+      (soap-wsdl-add-namespace ns wsdl))))
 
-    wsdl))
-
+(defun soap-parse-wsdl (node wsdl)
+  "Construct a WSDL structure from NODE, which is an XML document."
+  (soap-parse-wsdl-phase-1 node)
+  (soap-parse-wsdl-phase-2 node wsdl)
+  (soap-parse-wsdl-phase-3 node wsdl)
+  (soap-parse-wsdl-phase-4 node wsdl)
+  (soap-parse-wsdl-phase-5 node wsdl)
+  wsdl)
 
 (defun soap-parse-message (node)
   "Parse NODE as a wsdl:message and return the corresponding type."
