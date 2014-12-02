@@ -1,5 +1,11 @@
 2014-12-02  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
 
+	* soap-client.el (soap-parse-server-response): Rename
+	soap-process-url-response.  Destroy the mime part.
+	(soap-invoke): Call soap-parse-server-response.
+
+2014-12-02  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
 	* soap-client.el: Update copyright date.
 
 2014-12-02  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
