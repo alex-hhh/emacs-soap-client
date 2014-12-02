@@ -103,24 +103,6 @@ are fully qualified for a different namespace.  This is a
 dynamically bound variable, controlled by
 `soap-with-local-xmlns'")
 
-(defvar soap-time-format 'string
-  "The current format for dateTime, time, date, gYearMonth, gYear,
-gMonthDay, gDay and gMonth.  Decoding will be from an ISO 8601
-string to this format.  Encoding will be from this format to an
-ISO 8601 string.  Supported formats are:
-
-'string:   Leave the string as-is.
-
-'internal: Decode the string directly into the Emacs-internal
-           time format.
-
-Emacs SOAP client supports up to 9 decimal places (nanoseconds)
-of time precision.
-
-SOAP-TIME-FORMAT is meant to be bound dynamically around
-soap-client calls.  It defaults to 'string for
-backward-compatibility.")
-
 (defvar soap-current-wsdl nil
   "The current WSDL document used when decoding the SOAP response.
 This is a dynamically bound variable.")
@@ -481,9 +463,7 @@ position.
 
 This is a specialization of `soap-encode-value' for
 `soap-xs-basic-type' objects."
-  (let ((kind (soap-xs-basic-type-kind type))
-        (time-value-p nil)
-        (fractional-seconds-p nil))
+  (let ((kind (soap-xs-basic-type-kind type)))
 
     (when (eq kind 'anyType)
       (cond ((stringp value)
@@ -507,29 +487,7 @@ This is a specialization of `soap-encode-value' for
                   (error "Not a string value: %s" value))
                 (url-insert-entities-in-string value))
                ((dateTime time date gYearMonth gYear gMonthDay gDay gMonth)
-                (cond ((and (eq soap-time-format 'internal)
-                            (consp value)
-                            (progn
-                              (when (>= (length value) 2)
-                                (if (and (numberp (nth 0 value))
-                                         (numberp (nth 1 value)))
-                                    (setq time-value-p t)
-                                  (setq time-value-p nil)))
-                              (when (and time-value-p
-                                         (>= (length value) 3))
-                                (if (numberp (nth 2 value))
-                                    ;; time-value-p is still t.
-                                    (when (> (nth 2 value) 0)
-                                      (setq fractional-seconds-p t))
-                                  (setq time-value-p nil)))
-                              (when (and time-value-p
-                                         (>= (length value) 4))
-                                (if (numberp (nth 3 value))
-                                    ;; time-value-p is still t.
-                                    (when (> (nth 3 value) 0)
-                                      (setq fractional-seconds-p t))
-                                  (setq time-value-p nil)))
-                              time-value-p))
+                (cond ((consp value)
                        ;; Value is a (current-time) style value, convert to the
                        ;; ISO 8601-inspired XSD string format in UTC.
                        (format-time-string
@@ -543,27 +501,16 @@ This is a specialization of `soap-encode-value' for
                            (gMonthDay "--%m-%d")
                            (gDay "---%d")
                            (gMonth "--%m"))
-                         (when fractional-seconds-p ".%N")
                          ;; Internal time is always in UTC.
                          "Z")
                         value t))
-                      ((and (eq soap-time-format 'string)
-                            (stringp value))
+                      ((stringp value)
                        ;; Value is a string in the ISO 8601-inspired XSD
                        ;; format.  Validate it.
                        (soap-decode-date-time value kind)
                        (url-insert-entities-in-string value))
                       (t
-                       (case soap-time-format
-                         (string
-                          (error (concat "Not a dateTime, date or time value:"
-                                         " expected string format")))
-                         (internal
-                          (error (concat "Not a dateTime, date or time value:"
-                                         " expected internal time format")))
-                         (t
-                          (error (concat "Not a dateTime, date or time value:"
-                                         " unknown soap-time-format")))))))
+                       (error "Invalid date-time format"))))
                (boolean
                 (unless (memq value '(t nil))
                   (error "Not a boolean value"))
@@ -726,16 +673,7 @@ This is a specialization of `soap-decode-type' for
         (ecase kind
           ((string anyURI QName ID IDREF language) (car contents))
           ((dateTime time date gYearMonth gYear gMonthDay gDay gMonth)
-           (case soap-time-format
-             (string
-              (car contents))
-             (internal
-              (let ((decoded-time (soap-decode-date-time (car contents) kind)))
-                (time-add
-                 (apply 'encode-time decoded-time)
-                 (seconds-to-time (nth 6 decoded-time)))))
-             (t
-              (error "Time format %s is not supported" soap-time-format))))
+           (car contents))
           ((long short int integer
                  unsignedInt unsignedLong unsignedShort nonNegativeInteger
                  decimal byte float double duration)
