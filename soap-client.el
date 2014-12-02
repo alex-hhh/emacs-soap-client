@@ -719,7 +719,7 @@ contains a reference, we retrive the type of the reference."
         (and e (equal e "0")))))
 
 (defun soap-node-multiple (node)
-  "Return t if NODE allows multiple elements."
+  "Return t if NODE permits multiple elements."
   (let* ((e (xml-get-attribute-or-nil node 'maxOccurs)))
     (and e (not (equal e "1")))))
 
@@ -806,16 +806,18 @@ See also `soap-wsdl-resolve-references'."
             (push element (soap-xs-element-alternatives target))
           (soap-warning "No target found for substitution-group" subst))))))
 
-(defun soap-encode-xs-element-attributes (_value _element)
+(defun soap-encode-xs-element-attributes (value element)
   "Encode the XML attributes for VALUE according to ELEMENT.
 Currently no attributes are needed.
 
 This is a specialization of `soap-encode-attributes' for
 `soap-xs-basic-type' objects."
+  ;; Use the variables to suppress checkdoc and compiler warnings.
+  (list value element)
   nil)
 
 (defun soap-should-encode-value-for-xs-element (value element)
-  ""
+  "Return t if VALUE should be encoded for ELEMENT, nil otherwise."
   (cond
    ;; if value is not nil, attempt to encode it
    (value)
@@ -1178,7 +1180,7 @@ See also `soap-wsdl-resolve-references'."
              (if (rng-dt-make-value convert value)
                  value
                (error "Invalid %s: %s" (symbol-name kind) value))
-           (error "don't know how to convert %s" kind)))))))
+           (error "Don't know how to convert %s" kind)))))))
 
 (defun soap-validate-xs-simple-type (value type)
   "Validate VALUE against the restrictions of TYPE."
@@ -1554,8 +1556,9 @@ This is a specialization of `soap-encode-attributes' for
         (insert " xsi:nil=\"true\"")))))
 
 (defun soap-get-candidate-elements (element)
-  "Return a list of elements that are compatible with ELEMENT,
-including ELEMENT's references and alternatives."
+  "Return a list of elements that are compatible with ELEMENT.
+The returned list includes ELEMENT's references and
+alternatives."
   (let ((reference (soap-xs-element-reference element)))
     ;; If the element is a reference, append the reference and its
     ;; alternatives...
@@ -1650,9 +1653,9 @@ This is a specialization of `soap-encode-value' for
             (soap-xs-complex-type-indicator type)))))
 
 (defun soap-xml-get-children-fq (node child-name)
-  "Return the children of NODE named CHILD-NAME. This is the same
-as `xml-get-children1', but NODE's local namespace is used to
-resolve the children's namespace tags."
+  "Return the children of NODE named CHILD-NAME.
+This is the same as `xml-get-children1', but NODE's local
+namespace is used to resolve the children's namespace tags."
   (let (result)
     (dolist (c (xml-node-children node))
       (when (and (consp c)
@@ -1667,8 +1670,8 @@ resolve the children's namespace tags."
     (nreverse result)))
 
 (defun soap-xs-element-get-fq-name (element wsdl)
-  "Return ELEMENT's fully-qualified name using WSDL's alias
-table, or nil if ELEMENT does not have a name."
+  "Return ELEMENT's fully-qualified name using WSDL's alias table.
+Return nil if ELEMENT does not have a name."
   (let* ((ns-aliases (soap-wsdl-alias-table wsdl))
          (ns-name (cdr (assoc
                         (soap-element-namespace-tag element)
@@ -1677,8 +1680,8 @@ table, or nil if ELEMENT does not have a name."
       (cons ns-name (soap-element-name element)))))
 
 (defun soap-xs-complex-type-optional-p (type)
-  "Return t if TYPE or any of TYPE's ancestor types is optional,
-nil otherwise."
+  "Return t if TYPE or any of TYPE's ancestor types is optional.
+Return nil otherwise."
   (when type
     (or (soap-xs-complex-type-optional? type)
         (and (soap-xs-complex-type-p type)
@@ -1686,8 +1689,8 @@ nil otherwise."
               (soap-xs-complex-type-base type))))))
 
 (defun soap-xs-complex-type-multiple-p (type)
-  "Return t if TYPE or any of TYPE's ancestor types allows
-multiple elements, nil otherwise."
+  "Return t if TYPE or any of TYPE's ancestor types permits multiple elements.
+Return nil otherwise."
   (when type
     (or (soap-xs-complex-type-multiple? type)
         (and (soap-xs-complex-type-p type)
@@ -1705,8 +1708,7 @@ multiple elements, nil otherwise."
     attributes))
 
 (defun soap-get-xs-attributes (type)
-  "Return a list of all of TYPE's attributes and all of TYPE's
-ancestors' attributes."
+  "Return a list of all of TYPE's and TYPE's ancestors' attributes."
   (let* ((base (and (soap-xs-complex-type-p type)
                     (soap-xs-complex-type-base type)))
          (attributes (append (soap-xs-type-attributes type)
@@ -1717,8 +1719,7 @@ ancestors' attributes."
       attributes)))
 
 (defun soap-decode-xs-attributes (type node)
-  "Use TYPE, a `soap-xs-complex-type', to decode the attributes
-of NODE."
+  "Use TYPE, a `soap-xs-complex-type', to decode the attributes of NODE."
   (let (result)
     (dolist (attribute (soap-get-xs-attributes type))
       (let* ((name (soap-xs-attribute-name attribute))
@@ -1944,7 +1945,7 @@ This is a specialization of `soap-decode-type' for
   )
 
 (defun soap-make-wsdl (origin)
-  "Create a new WSDL document and intialize it."
+  "Create a new WSDL document, loaded from ORIGIN, and intialize it."
   (let ((wsdl (soap-make-wsdl^ :origin origin)))
 
     ;; Add the XSD types to the wsdl document
@@ -2057,7 +2058,7 @@ used to resolve the namespace alias."
 ;;;;; soap-parse-schema
 
 (defun soap-parse-schema (node wsdl)
-  "Parse a schema NODE.
+  "Parse a schema NODE, placing the results in WSDL.
 Return a SOAP-NAMESPACE containing the elements."
   (soap-with-local-xmlns node
     (assert (eq (soap-l2wk (xml-node-name node)) 'xsd:schema)
@@ -2290,7 +2291,8 @@ traverse an element tree."
         (kill-buffer buffer)))))
 
 (defun soap-fetch-xml-from-url (url wsdl)
-  "Load an XML document from URL and return it."
+  "Load an XML document from URL and return it.
+The previously parsed URL is read from WSDL."
   (message "Fetching from %s" url)
   (let ((current-file (url-expand-file-name url (soap-wsdl-current-file wsdl)))
         (url-request-method "GET")
@@ -2307,7 +2309,8 @@ traverse an element tree."
         (soap-process-url-response (current-buffer))))))
 
 (defun soap-fetch-xml-from-file (file wsdl)
-  "Load an XML document from FILE and return it."
+  "Load an XML document from FILE and return it.
+The previously parsed file is read from WSDL."
   (let* ((current-file (soap-wsdl-current-file wsdl))
          (expanded-file (expand-file-name file
                                           (if current-file
@@ -2319,7 +2322,8 @@ traverse an element tree."
       (car (xml-parse-region (point-min) (point-max))))))
 
 (defun soap-fetch-xml (file-or-url wsdl)
-  "Load an XML document from FILE-OR-URL and return it."
+  "Load an XML document from FILE-OR-URL and return it.
+The previously parsed file or URL is read from WSDL."
   (let ((current-file (or (soap-wsdl-current-file wsdl) file-or-url)))
     (if (or (and current-file (file-exists-p current-file))
             (file-exists-p file-or-url))
@@ -2327,7 +2331,8 @@ traverse an element tree."
       (soap-fetch-xml-from-url file-or-url wsdl))))
 
 (defun soap-load-wsdl (file-or-url &optional wsdl)
-  "Load a WSDL document from FILE-OR-URL and return it."
+  "Load a document from FILE-OR-URL and return it.
+Build on WSDL if it is provided."
   (let* ((wsdl (or wsdl (soap-make-wsdl file-or-url)))
          (xml (soap-fetch-xml file-or-url wsdl)))
     (soap-wsdl-resolve-references (soap-parse-wsdl xml wsdl))
@@ -2408,7 +2413,7 @@ traverse an element tree."
       (soap-wsdl-add-namespace ns wsdl))))
 
 (defun soap-parse-wsdl (node wsdl)
-  "Construct a WSDL structure from NODE, which is an XML document."
+  "Construct from NODE a WSDL structure, which is an XML document."
   (soap-parse-wsdl-phase-1 node)
   (soap-parse-wsdl-phase-2 node wsdl)
   (soap-parse-wsdl-phase-3 node wsdl)
@@ -2847,7 +2852,7 @@ work."
   (when (soap-element-namespace-tag type)
     (add-to-list 'soap-encoded-namespaces (soap-element-namespace-tag type))))
 
-(defun soap-encode-body (operation parameters _wsdl &optional service-url)
+(defun soap-encode-body (operation parameters &optional service-url)
   "Create the body of a SOAP request for OPERATION in the current buffer.
 PARAMETERS is a list of parameters supplied to the OPERATION.
 
@@ -2920,7 +2925,7 @@ SERVICE-URL should be provided when WS-Addressing is being used."
           (use (soap-bound-operation-use operation)))
 
       ;; Create the request body
-      (soap-encode-body operation parameters wsdl service-url)
+      (soap-encode-body operation parameters service-url)
 
       ;; Put the envelope around the body
       (goto-char (point-min))
