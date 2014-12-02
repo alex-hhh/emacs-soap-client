@@ -597,25 +597,28 @@ This is a specialization of `soap-encode-value' for
         (insert value-string)))))
 
 ;; Inspired by rng-xsd-convert-date-time.
-(defun soap-decode-date-time (date-time-string kind)
-  "Decode DATE-TIME-STRING, in ISO 8601 basic or extended format,
-and return a list in a format (SEC MINUTE HOUR DAY MONTH YEAR
-SEC-FRACTION DATATYPE ZONE).
+(defun soap-decode-date-time (date-time-string datatype)
+  "Decode DATE-TIME-STRING as DATATYPE.
+DATE-TIME-STRING should be in ISO 8601 basic or extended format.
+DATATYPE is one of dateTime, time, date, gYearMonth, gYear,
+gMonthDay, gDay or gMonth.
 
-This format is meant to be similar to that returned by
-DECODE-TIME (and compatible with ENCODE-TIME).  The differences
-are the DOW (day-of-week) field is replaced with SEC-FRACTION, a
-float representing the fractional seconds, and the DST (daylight
-savings time) field is replaced with DATATYPE, a symbol
-representing the XSD primitive datatype.  This symbol can be used
-to determine which fields apply and which don't when it's not
-already clear from context.  For example a datatype of 'time
-means the year, month and day fields should be ignored.
+Return a list in a format (SEC MINUTE HOUR DAY MONTH YEAR
+SEC-FRACTION DATATYPE ZONE).  This format is meant to be similar
+to that returned by `decode-time' (and compatible with
+`encode-time').  The differences are the DOW (day-of-week) field
+is replaced with SEC-FRACTION, a float representing the
+fractional seconds, and the DST (daylight savings time) field is
+replaced with DATATYPE, a symbol representing the XSD primitive
+datatype.  This symbol can be used to determine which fields
+apply and which don't when it's not already clear from context.
+For example a datatype of 'time means the year, month and day
+fields should be ignored.
 
 This function will throw an error if DATE-TIME-STRING represents
 a leap second, since the XML Schema 1.1 standard explicitly
 disallows them."
-  (let* ((datetime-regexp (cadr (get kind 'rng-xsd-convert)))
+  (let* ((datetime-regexp (cadr (get datatype 'rng-xsd-convert)))
          (year-sign (progn
                       (string-match datetime-regexp date-time-string)
                       (match-string 1 date-time-string)))
@@ -678,7 +681,7 @@ disallows them."
       (error "Invalid or unsupported time: %s" date-time-string))
     ;; Return a value in a format similar to that returned by decode-time, and
     ;; suitable for (apply 'encode-time ...).
-    (list second minute hour day month year second-fraction kind
+    (list second minute hour day month year second-fraction datatype
           (if has-time-zone
               (* (rng-xsd-time-to-seconds
                   time-zone-hour
