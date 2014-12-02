@@ -1,3 +1,14 @@
+2014-12-01  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
+	* soap-client.el (soap-current-file): Remove variable.
+	(soap-wsdl): Add current-file slot.
+	(soap-fetch-xml-from-url): Add wsdl argument.  Look up current
+	file from wsdl.
+	(soap-fetch-xml-from-file): Likewise.
+	(soap-fetch-xml): Likewise.
+	(soap-load-wsdl): Always create wsdl object first.
+	(soap-parse-wsdl): Pass wsdl to soap-fetch-xml.
+
 2014-11-29  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
 
 	* soap-client.el (soap-xs-element): Add is-group slot.

@@ -103,10 +103,6 @@ are fully qualified for a different namespace.  This is a
 dynamically bound variable, controlled by
 `soap-with-local-xmlns'")
 
-(defvar soap-current-file nil
-  "The current file name while parsing a WSDL document.
-This value is only valid while a WSDL is loaded")
-
 (defvar soap-time-format 'string
   "The current format for dateTime, time, date, gYearMonth, gYear,
 gMonthDay, gDay and gMonth.  Decoding will be from an ISO 8601
@@ -2017,6 +2013,7 @@ Return a SOAP-NAMESPACE containing the elements."
              (:constructor soap-make-wsdl^)
              (:copier soap-copy-wsdl))
   origin                         ; file or URL from which this wsdl was loaded
+  current-file                   ; most-recently fetched file or URL
   ports                          ; a list of SOAP-PORT instances
   alias-table                    ; a list of namespace aliases
   namespaces                     ; a list of namespaces
@@ -2316,17 +2313,17 @@ traverse an element tree."
 
 ;;;;; Loading WSDL from XML documents
 
-(defun soap-fetch-xml-from-url (url)
+(defun soap-fetch-xml-from-url (url wsdl)
   "Load an XML document from URL and return it."
   (message "Fetching from %s" url)
-  (setq url (url-expand-file-name url soap-current-file))
-  (setq soap-current-file url)
-  (let ((url-request-method "GET")
+  (let ((current-file (url-expand-file-name url (soap-wsdl-current-file wsdl)))
+        (url-request-method "GET")
         (url-package-name "soap-client.el")
         (url-package-version "1.0")
         (url-mime-charset-string "utf-8;q=1, iso-8859-1;q=0.5")
         (url-http-attempt-keepalives t))
-    (let ((buffer (url-retrieve-synchronously url)))
+    (setf (soap-wsdl-current-file wsdl) current-file)
+    (let ((buffer (url-retrieve-synchronously current-file)))
       (with-current-buffer buffer
         (declare (special url-http-response-status))
         (if (> url-http-response-status 299)
@@ -2342,33 +2339,33 @@ traverse an element tree."
                 (car (xml-parse-region (point-min) (point-max)))
               (kill-buffer buffer))))))))
 
-(defun soap-fetch-xml-from-file (file)
+(defun soap-fetch-xml-from-file (file wsdl)
   "Load an XML document from FILE and return it."
-  (setq file (expand-file-name file
-                               (if soap-current-file
-                                   (file-name-directory soap-current-file)
-                                   default-directory)))
-  (setq soap-current-file file)
-  (with-temp-buffer
-    (insert-file-contents file)
-    (car (xml-parse-region (point-min) (point-max)))))
+  (let* ((current-file (soap-wsdl-current-file wsdl))
+         (expanded-file (expand-file-name file
+                                          (if current-file
+                                              (file-name-directory current-file)
+                                            default-directory))))
+    (setf (soap-wsdl-current-file wsdl) expanded-file)
+    (with-temp-buffer
+      (insert-file-contents expanded-file)
+      (car (xml-parse-region (point-min) (point-max))))))
 
-(defun soap-fetch-xml (file-or-url)
+(defun soap-fetch-xml (file-or-url wsdl)
   "Load an XML document from FILE-OR-URL and return it."
-  (if (or (and soap-current-file (file-exists-p soap-current-file))
-          (file-exists-p file-or-url))
-      (soap-fetch-xml-from-file file-or-url)
-      (soap-fetch-xml-from-url file-or-url)))
+  (let ((current-file (or (soap-wsdl-current-file wsdl) file-or-url)))
+    (if (or (and current-file (file-exists-p current-file))
+            (file-exists-p file-or-url))
+        (soap-fetch-xml-from-file file-or-url wsdl)
+      (soap-fetch-xml-from-url file-or-url wsdl))))
 
 (defun soap-load-wsdl (file-or-url &optional wsdl)
   "Load a WSDL document from FILE-OR-URL and return it."
   (unless wsdl
-    (setq soap-current-file nil
-          soap-xmlschema-imports nil))
-  (let ((xml (soap-fetch-xml file-or-url))
-        (wsdl (or wsdl (soap-make-wsdl file-or-url))))
-    (soap-wsdl-resolve-references
-     (soap-parse-wsdl xml wsdl))
+    (setq soap-xmlschema-imports nil))
+  (let* ((wsdl (or wsdl (soap-make-wsdl file-or-url)))
+         (xml (soap-fetch-xml file-or-url wsdl)))
+    (soap-wsdl-resolve-references (soap-parse-wsdl xml wsdl))
     wsdl))
 
 (defalias 'soap-load-wsdl-from-url 'soap-load-wsdl)
@@ -2407,7 +2404,7 @@ traverse an element tree."
 
     (while soap-xmlschema-imports
       (let ((import (pop soap-xmlschema-imports)))
-        (let ((xml (soap-fetch-xml import)))
+        (let ((xml (soap-fetch-xml import wsdl)))
               (soap-wsdl-add-namespace (soap-parse-schema xml) wsdl))))
 
     (let ((ns (make-soap-namespace :name (soap-get-target-namespace node))))
