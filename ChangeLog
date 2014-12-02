@@ -1,5 +1,16 @@
 2014-12-01  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
 
+	* soap-client.el (soap-process-url-response): New function.
+	(soap-fetch-xml-from-url): Call soap-process-url-response.
+	(soap-parse-wsdl-phase-1): New function.
+	(soap-parse-wsdl-phase-2): Likewise.
+	(soap-parse-wsdl-phase-3): Likewise.
+	(soap-parse-wsdl-phase-4): Likewise.
+	(soap-parse-wsdl-phase-5): Likewise.
+	(soap-parse-wsdl): Call phase functions.
+
+2014-12-01  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
 	* soap-client.el (soap-decode-xs-basic-type): Remove one-argument
 	and call.
 
