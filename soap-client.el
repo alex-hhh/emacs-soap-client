@@ -2277,8 +2277,8 @@ traverse an element tree."
 
 ;;;;; Loading WSDL from XML documents
 
-(defun soap-process-url-response (buffer)
-  "Parse the XML contents of BUFFER."
+(defun soap-parse-server-response ()
+  "Error-check and parse the XML contents of current buffer."
   (let ((mime-part (mm-dissect-buffer t t)))
     (unless mime-part
       (error "Failed to decode response from server"))
@@ -2288,7 +2288,8 @@ traverse an element tree."
       (mm-insert-part mime-part)
       (prog1
           (car (xml-parse-region (point-min) (point-max)))
-        (kill-buffer buffer)))))
+        (kill-buffer)
+        (mm-destroy-part mime-part)))))
 
 (defun soap-fetch-xml-from-url (url wsdl)
   "Load an XML document from URL and return it.
@@ -2306,7 +2307,7 @@ The previously parsed URL is read from WSDL."
         (declare (special url-http-response-status))
         (if (> url-http-response-status 299)
             (error "Error retrieving WSDL: %s" url-http-response-status))
-        (soap-process-url-response (current-buffer))))))
+        (soap-parse-server-response)))))
 
 (defun soap-fetch-xml-from-file (file wsdl)
   "Load an XML document from FILE and return it.
@@ -3014,19 +3015,8 @@ operations in a WSDL document."
                     ;; error)
                     (warn "Error in SOAP response: HTTP code %s"
                           url-http-response-status))
-                (let ((mime-part (mm-dissect-buffer t t)))
-                  (unless mime-part
-                    (error "Failed to decode response from server"))
-                  (unless (equal (car (mm-handle-type mime-part)) "text/xml")
-                    (error "Server response is not an XML document"))
-                  (with-temp-buffer
-                    (mm-insert-part mime-part)
-                    (let ((response (car (xml-parse-region
-                                          (point-min) (point-max)))))
-                      (prog1
-                          (soap-parse-envelope response operation wsdl)
-                        (kill-buffer buffer)
-                        (mm-destroy-part mime-part))))))
+                (let ((response (soap-parse-server-response)))
+                  (soap-parse-envelope response operation wsdl)))
             (soap-error
              ;; Propagate soap-errors -- they are error replies of the
              ;; SOAP protocol and don't indicate a communication
