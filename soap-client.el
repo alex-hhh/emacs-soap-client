@@ -1,5 +1,5 @@
 ;;;; soap-client.el -- Access SOAP web services       -*- lexical-binding: t -*-
-;; Copyright (C) 2009-2011  Free Software Foundation, Inc.
+;; Copyright (C) 2009-2014  Free Software Foundation, Inc.
 
 ;; Author: Alexandru Harsanyi <AlexHarsanyi@gmail.com>
 ;; Created: December, 2009
