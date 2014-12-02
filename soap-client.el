@@ -708,7 +708,7 @@ This is a specialization of `soap-decode-type' for
       (let ((attribute-type (soap-l2fq (car attribute)))
             (attribute-value (cdr attribute)))
         ;; xsi:type can override an element's expected type.
-        (when (and (equal attribute-type (soap-l2fq "xsi:type")))
+        (when (equal attribute-type (soap-l2fq "xsi:type"))
           (setq validate-type
                 (soap-wsdl-get attribute-value soap-current-wsdl)))
         ;; xsi:nil can specify that an element is nil in which case we don't
