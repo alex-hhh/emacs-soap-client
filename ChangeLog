@@ -1,5 +1,10 @@
 2014-12-03  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
 
+	* soap-client.el (soap-parse-server-response): Improve docstring.
+	(soap-invoke): Inline call to soap-parse-server-response.
+
+2014-12-03  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
 	* soap-client.el (soap-decode-xs-complex-type): Prevent incorrect
 	warning.
 
