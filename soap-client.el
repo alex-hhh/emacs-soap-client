@@ -1870,6 +1870,7 @@ This is a specialization of `soap-decode-type' for
                                     element-type))))
                     (soap-warning "missing non-nillable slot %s" e-name))
                    ((and (> instance-count 1)
+                         (not (soap-xs-complex-type-multiple-p type))
                          (not (soap-xs-element-multiple? element))
                          (and (soap-xs-complex-type-p element-type)
                               (not (soap-xs-complex-type-multiple-p
