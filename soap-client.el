@@ -2279,7 +2279,7 @@ traverse an element tree."
 ;;;;; Loading WSDL from XML documents
 
 (defun soap-parse-server-response ()
-  "Error-check and parse the XML contents of current buffer."
+  "Error-check and parse the XML contents of the current buffer."
   (let ((mime-part (mm-dissect-buffer t t)))
     (unless mime-part
       (error "Failed to decode response from server"))
@@ -3016,8 +3016,8 @@ operations in a WSDL document."
                     ;; error)
                     (warn "Error in SOAP response: HTTP code %s"
                           url-http-response-status))
-                (let ((response (soap-parse-server-response)))
-                  (soap-parse-envelope response operation wsdl)))
+                (soap-parse-envelope (soap-parse-server-response)
+                                     operation wsdl))
             (soap-error
              ;; Propagate soap-errors -- they are error replies of the
              ;; SOAP protocol and don't indicate a communication
