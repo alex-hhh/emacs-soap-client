@@ -1,5 +1,10 @@
 2014-12-03  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
 
+	* soap-client.el (soap-invoke-async): New function.
+	(soap-invoke): Reimplement using soap-invoke-async.
+
+2014-12-03  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
 	* soap-client.el (soap-parse-server-response): Improve docstring.
 	(soap-invoke): Inline call to soap-parse-server-response.
 
