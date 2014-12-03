@@ -2973,6 +2973,13 @@ NOTE: The SOAP service provider should document the available
 operations and their parameters for the service.  You can also
 use the `soap-inspect' function to browse the available
 operations in a WSDL document."
+  (soap-invoke-async nil nil wsdl service operation-name parameters))
+
+(defun soap-invoke-async (cb cargs wsdl service operation-name &rest parameters)
+  "Like `soap-invoke', but call CB asynchronously with response.
+CB is called as (apply CB RESPONSE CARGS), where RESPONSE is the
+SOAP invocation result.  WSDL, SERVICE, OPERATION-NAME and
+PARAMETERS are as described in `soap-invoke'."
   (let ((port (catch 'found
                 (dolist (p (soap-wsdl-ports wsdl))
                   (when (equal service (soap-element-name p))
@@ -3003,30 +3010,41 @@ operations in a WSDL document."
                                                operation))
                                         (cons "Content-Type"
                                               "text/xml; charset=utf-8"))))
-        (let ((buffer (url-retrieve-synchronously
-                       (soap-port-service-url port))))
-          (condition-case err
-              (with-current-buffer buffer
-                (declare (special url-http-response-status))
-                (if (null url-http-response-status)
-                    (error "No HTTP response from server"))
-                (if (and soap-debug (> url-http-response-status 299))
-                    ;; This is a warning because some SOAP errors come
-                    ;; back with a HTTP response 500 (internal server
-                    ;; error)
-                    (warn "Error in SOAP response: HTTP code %s"
-                          url-http-response-status))
-                (soap-parse-envelope (soap-parse-server-response)
-                                     operation wsdl))
-            (soap-error
-             ;; Propagate soap-errors -- they are error replies of the
-             ;; SOAP protocol and don't indicate a communication
-             ;; problem or a bug in this code.
-             (signal (car err) (cdr err)))
-            (error
-             (when soap-debug
-               (pop-to-buffer buffer))
-             (error (error-message-string err)))))))))
+        (if cb
+            (url-retrieve
+             (soap-port-service-url port)
+             (lambda (status)
+               (let ((error-status (plist-get status :error))))
+               (if error-status
+                   (signal (car error-status) (cdr error-status))
+                 (apply callback
+                        (soap-parse-envelope (soap-parse-server-response)
+                                             operation wsdl)
+                        cargs))))
+          (let ((buffer (url-retrieve-synchronously
+                         (soap-port-service-url port))))
+            (condition-case err
+                (with-current-buffer buffer
+                  (declare (special url-http-response-status))
+                  (if (null url-http-response-status)
+                      (error "No HTTP response from server"))
+                  (if (and soap-debug (> url-http-response-status 299))
+                      ;; This is a warning because some SOAP errors come
+                      ;; back with a HTTP response 500 (internal server
+                      ;; error)
+                      (warn "Error in SOAP response: HTTP code %s"
+                            url-http-response-status))
+                  (soap-parse-envelope (soap-parse-server-response)
+                                       operation wsdl))
+              (soap-error
+               ;; Propagate soap-errors -- they are error replies of the
+               ;; SOAP protocol and don't indicate a communication
+               ;; problem or a bug in this code.
+               (signal (car err) (cdr err)))
+              (error
+               (when soap-debug
+                 (pop-to-buffer buffer))
+               (error (error-message-string err))))))))))
 
 (provide 'soap-client)
 
