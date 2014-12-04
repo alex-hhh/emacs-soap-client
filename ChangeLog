@@ -1,5 +1,15 @@
 2014-12-03  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
 
+	* soap-client.el (soap-parse-wsdl-phase-validate-node): Rename
+	function.
+	(soap-parse-wsdl-phase-fetch-imports): Likewise.
+	(soap-parse-wsdl-phase-parse-schema): Likewise.
+	(soap-parse-wsdl-phase-fetch-schema): Likewise.
+	(soap-parse-wsdl-phase-finish-parsing): Likewise.
+	(soap-parse-wsdl): Update calls.
+
+2014-12-03  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
 	* soap-client.el (soap-invoke-async): Fix callback invocation.
 
 2014-12-03  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
