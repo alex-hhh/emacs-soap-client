@@ -2342,7 +2342,7 @@ Build on WSDL if it is provided."
 
 (defalias 'soap-load-wsdl-from-url 'soap-load-wsdl)
 
-(defun soap-parse-wsdl-phase-1 (node)
+(defun soap-parse-wsdl-phase-validate-node (node)
   "Assert that NODE is valid."
   (soap-with-local-xmlns node
     (let ((node-name (soap-l2wk (xml-node-name node))))
@@ -2350,15 +2350,15 @@ Build on WSDL if it is provided."
               nil
               "expecting wsdl:definitions node, got %s" node-name))))
 
-(defun soap-parse-wsdl-phase-2 (node wsdl)
-  "Load files imported by NODE into WSDL."
+(defun soap-parse-wsdl-phase-fetch-imports (node wsdl)
+  "Fetch and load files imported by NODE into WSDL."
   (soap-with-local-xmlns node
     (dolist (node (soap-xml-get-children1 node 'wsdl:import))
       (let ((location (xml-get-attribute-or-nil node 'location)))
         (when location
           (soap-load-wsdl location wsdl))))))
 
-(defun soap-parse-wsdl-phase-3 (node wsdl)
+(defun soap-parse-wsdl-phase-parse-schema (node wsdl)
   "Load types found in NODE into WSDL."
   (soap-with-local-xmlns node
     ;; Find all the 'xsd:schema nodes which are children of wsdl:types nodes and
@@ -2375,15 +2375,15 @@ Build on WSDL if it is provided."
               (soap-wsdl-add-namespace (soap-parse-schema node wsdl)
                                        wsdl))))))))
 
-(defun soap-parse-wsdl-phase-4 (node wsdl)
-  "Fetch schema imports defined by NODE into WSDL."
+(defun soap-parse-wsdl-phase-fetch-schema (node wsdl)
+  "Fetch and load schema imports defined by NODE into WSDL."
   (soap-with-local-xmlns node
     (while (soap-wsdl-xmlschema-imports wsdl)
       (let* ((import (pop (soap-wsdl-xmlschema-imports wsdl)))
              (xml (soap-fetch-xml import wsdl)))
         (soap-wsdl-add-namespace (soap-parse-schema xml wsdl) wsdl)))))
 
-(defun soap-parse-wsdl-phase-5 (node wsdl)
+(defun soap-parse-wsdl-phase-finish-parsing (node wsdl)
   "Finish parsing NODE into WSDL."
   (soap-with-local-xmlns node
     (let ((ns (make-soap-namespace :name (soap-get-target-namespace node))))
@@ -2416,11 +2416,14 @@ Build on WSDL if it is provided."
 
 (defun soap-parse-wsdl (node wsdl)
   "Construct from NODE a WSDL structure, which is an XML document."
-  (soap-parse-wsdl-phase-1 node)
-  (soap-parse-wsdl-phase-2 node wsdl)
-  (soap-parse-wsdl-phase-3 node wsdl)
-  (soap-parse-wsdl-phase-4 node wsdl)
-  (soap-parse-wsdl-phase-5 node wsdl)
+  ;; Break this into phases to allow for asynchronous parsing.
+  (soap-parse-wsdl-phase-validate-node node)
+  ;; Makes synchronous calls.
+  (soap-parse-wsdl-phase-fetch-imports node wsdl)
+  (soap-parse-wsdl-phase-parse-schema node wsdl)
+  ;; Makes synchronous calls.
+  (soap-parse-wsdl-phase-fetch-schema node wsdl)
+  (soap-parse-wsdl-phase-finish-parsing node wsdl)
   wsdl)
 
 (defun soap-parse-message (node)
