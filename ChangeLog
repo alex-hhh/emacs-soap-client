@@ -1,5 +1,9 @@
 2014-12-06  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
 
+	* soap-client.el (soap-invoke-async): Add error checking.
+
+2014-12-06  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
 	* soap-client.el (soap-invoke-internal): New function.
 	(soap-invoke-async): Call soap-invoke-internal.
 	(soap-invoke): Likewise.

@@ -3063,6 +3063,8 @@ operations in a WSDL document."
 CALLBACK is called as (apply CALLBACK RESPONSE CBARGS), where
 RESPONSE is the SOAP invocation result.  WSDL, SERVICE,
 OPERATION-NAME and PARAMETERS are as described in `soap-invoke'."
+  (unless callback
+    (error "Callback argument is nil"))
   (apply #'soap-invoke-internal callback cbargs wsdl service operation-name
          parameters))
 
