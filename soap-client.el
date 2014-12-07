@@ -2958,31 +2958,13 @@ http://schemas.xmlsoap.org/soap/encoding/\"\n"))
   :type 'boolean
   :group 'soap-client)
 
-(defun soap-invoke (wsdl service operation-name &rest parameters)
-  "Invoke a SOAP operation and return the result.
-
-WSDL is used for encoding the request and decoding the response.
-It also contains information about the WEB server address that
-will service the request.
-
-SERVICE is the SOAP service to invoke.
-
-OPERATION-NAME is the operation to invoke.
-
-PARAMETERS -- the remaining parameters are used as parameters for
-the SOAP request.
-
-NOTE: The SOAP service provider should document the available
-operations and their parameters for the service.  You can also
-use the `soap-inspect' function to browse the available
-operations in a WSDL document."
-  (soap-invoke-async nil nil wsdl service operation-name parameters))
-
-(defun soap-invoke-async (cb cargs wsdl service operation-name &rest parameters)
-  "Like `soap-invoke', but call CB asynchronously with response.
-CB is called as (apply CB RESPONSE CARGS), where RESPONSE is the
-SOAP invocation result.  WSDL, SERVICE, OPERATION-NAME and
-PARAMETERS are as described in `soap-invoke'."
+(defun soap-invoke-internal (callback cbargs wsdl service operation-name
+                                      &rest parameters)
+  "Implement `soap-invoke' and `soap-invoke-async'.
+If CALLBACK is non-nil, operate asynchronously, then call CALLBACK as (apply
+CALLBACK RESPONSE CBARGS), where RESPONSE is the SOAP invocation result.
+If CALLBACK is nil, operate synchronously.  WSDL, SERVICE,
+OPERATION-NAME and PARAMETERS are as described in `soap-invoke'."
   (let ((port (catch 'found
                 (dolist (p (soap-wsdl-ports wsdl))
                   (when (equal service (soap-element-name p))
@@ -3013,7 +2995,7 @@ PARAMETERS are as described in `soap-invoke'."
                                                operation))
                                         (cons "Content-Type"
                                               "text/xml; charset=utf-8"))))
-        (if cb
+        (if callback
             (url-retrieve
              (soap-port-service-url port)
              (lambda (status)
@@ -3022,11 +3004,11 @@ PARAMETERS are as described in `soap-invoke'."
                      (let ((error-status (plist-get status :error)))
                        (if error-status
                            (signal (car error-status) (cdr error-status))
-                         (apply cb
+                         (apply callback
                                 (soap-parse-envelope
                                  (soap-parse-server-response)
                                  operation wsdl)
-                                cargs)))
+                                cbargs)))
                    ;; Ensure the url-retrieve buffer is not leaked.
                    (and (buffer-live-p data-buffer)
                         (kill-buffer data-buffer))))))
@@ -3054,6 +3036,35 @@ PARAMETERS are as described in `soap-invoke'."
                (when soap-debug
                  (pop-to-buffer buffer))
                (error (error-message-string err))))))))))
+
+(defun soap-invoke (wsdl service operation-name &rest parameters)
+  "Invoke a SOAP operation and return the result.
+
+WSDL is used for encoding the request and decoding the response.
+It also contains information about the WEB server address that
+will service the request.
+
+SERVICE is the SOAP service to invoke.
+
+OPERATION-NAME is the operation to invoke.
+
+PARAMETERS -- the remaining parameters are used as parameters for
+the SOAP request.
+
+NOTE: The SOAP service provider should document the available
+operations and their parameters for the service.  You can also
+use the `soap-inspect' function to browse the available
+operations in a WSDL document."
+  (apply #'soap-invoke-internal nil nil wsdl service operation-name parameters))
+
+(defun soap-invoke-async (callback cbargs wsdl service operation-name
+                                   &rest parameters)
+  "Like `soap-invoke', but call CALLBACK asynchronously with response.
+CALLBACK is called as (apply CALLBACK RESPONSE CBARGS), where
+RESPONSE is the SOAP invocation result.  WSDL, SERVICE,
+OPERATION-NAME and PARAMETERS are as described in `soap-invoke'."
+  (apply #'soap-invoke-internal callback cbargs wsdl service operation-name
+         parameters))
 
 (provide 'soap-client)
 
