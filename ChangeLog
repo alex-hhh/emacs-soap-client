@@ -1,3 +1,8 @@
+2014-12-06  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
+	* soap-client.el (soap-invoke-async): Ensure buffer passed to
+	url-retrieve callback is killed.
+
 2014-12-03  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
 
 	* soap-client.el (soap-parse-wsdl-phase-validate-node): Rename

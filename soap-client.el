@@ -3017,13 +3017,19 @@ PARAMETERS are as described in `soap-invoke'."
             (url-retrieve
              (soap-port-service-url port)
              (lambda (status)
-               (let ((error-status (plist-get status :error)))
-                 (if error-status
-                     (signal (car error-status) (cdr error-status))
-                   (apply cb
-                          (soap-parse-envelope (soap-parse-server-response)
-                                               operation wsdl)
-                          cargs)))))
+               (let ((data-buffer (current-buffer)))
+                 (unwind-protect
+                     (let ((error-status (plist-get status :error)))
+                       (if error-status
+                           (signal (car error-status) (cdr error-status))
+                         (apply cb
+                                (soap-parse-envelope
+                                 (soap-parse-server-response)
+                                 operation wsdl)
+                                cargs)))
+                   ;; Ensure the url-retrieve buffer is not leaked.
+                   (and (buffer-live-p data-buffer)
+                        (kill-buffer data-buffer))))))
           (let ((buffer (url-retrieve-synchronously
                          (soap-port-service-url port))))
             (condition-case err
