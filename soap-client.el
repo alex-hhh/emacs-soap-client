@@ -2,6 +2,7 @@
 ;; Copyright (C) 2009-2014  Free Software Foundation, Inc.
 
 ;; Author: Alexandru Harsanyi <AlexHarsanyi@gmail.com>
+;; Author: Thomas Fitzsimmons <fitzsim@fitzsim.org>
 ;; Created: December, 2009
 ;; Keywords: soap, web-services, comm, hypermedia
 ;; Package: soap-client
