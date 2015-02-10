@@ -1,3 +1,430 @@
+2014-12-06  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
+	* soap-client.el (soap-invoke-async): Add error checking.
+
+2014-12-06  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
+	* soap-client.el (soap-invoke-internal): New function.
+	(soap-invoke-async): Call soap-invoke-internal.
+	(soap-invoke): Likewise.
+
+2014-12-06  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
+	* soap-client.el (soap-invoke-async): Ensure buffer passed to
+	url-retrieve callback is killed.
+
+2014-12-03  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
+	* soap-client.el (soap-parse-wsdl-phase-validate-node): Rename
+	function.
+	(soap-parse-wsdl-phase-fetch-imports): Likewise.
+	(soap-parse-wsdl-phase-parse-schema): Likewise.
+	(soap-parse-wsdl-phase-fetch-schema): Likewise.
+	(soap-parse-wsdl-phase-finish-parsing): Likewise.
+	(soap-parse-wsdl): Update calls.
+
+2014-12-03  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
+	* soap-client.el (soap-invoke-async): Fix callback invocation.
+
+2014-12-03  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
+	* soap-client.el (soap-invoke-async): New function.
+	(soap-invoke): Reimplement using soap-invoke-async.
+
+2014-12-03  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
+	* soap-client.el (soap-parse-server-response): Improve docstring.
+	(soap-invoke): Inline call to soap-parse-server-response.
+
+2014-12-03  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
+	* soap-client.el (soap-decode-xs-complex-type): Prevent incorrect
+	warning.
+
+2014-12-02  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
+	* soap-client.el (soap-parse-server-response): Rename
+	soap-process-url-response.  Destroy the mime part.
+	(soap-invoke): Call soap-parse-server-response.
+
+2014-12-02  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
+	* soap-client.el: Update copyright date.
+
+2014-12-02  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
+	* soap-client.el: Fix checkdoc issues.
+
+2014-12-02  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
+	* soap-client.el: Fix indentation and long lines.
+
+2014-12-01  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
+	* soap-client.el (soap-time-format): Remove variable.
+	(soap-encode-xs-basic-type): Simplify date-time format detection.
+	(soap-decode-xs-basic-type): Remove soap-time-format support.
+
+2014-12-01  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
+	* soap-client.el (soap-process-url-response): New function.
+	(soap-fetch-xml-from-url): Call soap-process-url-response.
+	(soap-parse-wsdl-phase-1): New function.
+	(soap-parse-wsdl-phase-2): Likewise.
+	(soap-parse-wsdl-phase-3): Likewise.
+	(soap-parse-wsdl-phase-4): Likewise.
+	(soap-parse-wsdl-phase-5): Likewise.
+	(soap-parse-wsdl): Call phase functions.
+
+2014-12-01  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
+	* soap-client.el (soap-decode-xs-basic-type): Remove one-argument
+	and call.
+
+2014-12-01  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
+	* soap-client.el (soap-decode-date-time): Improve docstring.
+
+2014-12-01  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
+	* soap-client.el (soap-xmlschema-imports): Remove variable.
+	(soap-parse-schema): Add wsdl argument.  Look up XML schema
+	imports from wsdl.
+	(soap-load-wsdl): Do not set soap-xmlschema-imports.
+	(soap-parse-wsdl): Get XML schema imports from wsdl.
+
+2014-12-01  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
+	* soap-client.el (soap-current-file): Remove variable.
+	(soap-wsdl): Add current-file slot.
+	(soap-fetch-xml-from-url): Add wsdl argument.  Look up current
+	file from wsdl.
+	(soap-fetch-xml-from-file): Likewise.
+	(soap-fetch-xml): Likewise.
+	(soap-load-wsdl): Always create wsdl object first.
+	(soap-parse-wsdl): Pass wsdl to soap-fetch-xml.
+
+2014-11-29  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
+	* soap-client.el (soap-xs-element): Add is-group slot.
+	(soap-xs-parse-element): Set is-group slot.
+	(soap-resolve-references-for-xs-element): Skip is-group elements.
+	(soap-xs-complex-type): Add is-group slot.
+	(soap-xs-parse-complex-type): Set is-group slot.
+	(soap-xs-parse-sequence): Parse xsd:group elements.
+	(soap-resolve-references-for-xs-complex-type): Inline elements
+	from referenced xsd:group nodes.
+	(soap-parse-schema): Parse xsd:group nodes.
+
+2014-11-25  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
+	* soap-client.el (soap-invoke): Don't set url-http-version to 1.0.
+
+2014-11-25  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
+	* soap-client.el (soap-decode-xs-complex-type): Allow choice nodes
+	to accept multiple values.
+
+2014-11-12  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
+	* soap-client.el (soap-encode-body): Check parameters argument for
+	extra header values.
+
+2014-11-11  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
+	* soap-client.el (soap-well-known-xmlns): Add wsa and wsaw tags.
+	(soap-operation): Add input-action and output-action slots.
+	(soap-parse-operation): Parse wsaw:Action nodes.
+	(soap-encode-body): Encode service-url for WS-Addressing.
+	(soap-create-envelope): Likewise.
+	(soap-invoke): Update soap-create-envelope call to provide
+	service-url argument.
+
+2014-09-24  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
+	* soap-client.el (soap-decode-xs-complex-type): Support xsi:type
+	override attribute.
+	(soap-decode-array): Likewise.
+
+2014-09-23  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
+	* soap-client.el (soap-parse-schema): Handle location attribute.
+
+2014-08-20  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
+	* soap-client.el (soap-decode-type): Check that multiRef matched
+	validation regexp.
+
+2014-08-20  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
+	* soap-client.el (soap-encode-xs-simple-type): Encode xsd:list
+	nodes.
+	(soap-decode-xs-simple-type): Decode xsd:list nodes.
+
+2014-08-17  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
+	* soap-client.el (soap-get-candidate-elements): Fix reference
+	handling.
+
+2014-08-17  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
+	* soap-client.el (soap-xs-simple-type): Add is-list slot.
+	(soap-xs-parse-simple-type): Call soap-xs-add-list for xsd:list
+	nodes.
+	(soap-xs-add-list): New function.
+
+2014-08-17  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
+	* soap-client.el (soap-encode-xs-element): When a boolean is
+	expected, interpret nil as "false".
+
+2014-08-04  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
+	* soap-client.el (soap-make-xs-basic-types): Add gYearMonth,
+	gYear, gMonthDay, gDay and gMonth.
+
+2014-07-24  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
+	* soap-client.el (soap-time-format): New variable.
+	(soap-encode-xs-basic-type): Handle dateTime, time, date,
+	gYearMonth, gYear, gMonthDay, gDay and gMonth.
+	(soap-decode-date-time): New function.
+	(soap-decode-xs-basic-type): Use soap-decode-date-time.
+
+2014-07-03  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
+	* soap-client.el (soap-encode-xs-basic-type): Validate value after
+	encoding.
+	(soap-decode-xs-basic-type): Validate value before decoding.
+
+2014-07-03  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
+	* soap-client.el (soap-validate-xs-basic-type): New function.
+	(soap-validate-xs-simple-type): Call soap-validate-xs-basic-type.
+
+2014-06-29  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
+	* soap-client.el (soap-xs-add-union): Append result to base
+	instead of overwriting it.
+	(soap-validate-xs-simple-type): Add union support.
+
+2014-06-21  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
+	* soap-client.el (soap-xs-add-restriction): Translate pattern to
+	Emacs regexp using xsdre-translate.
+	(soap-validate-xs-simple-type): Validate value against pattern.
+
+2014-06-03  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
+	* soap-client.el (soap-xs-add-union): Preserve WSDL order of
+	inline simpleType nodes.
+	(soap-decode-type): Handle union types.
+
+2014-05-25  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
+	* soap-client.el (soap-decode-xs-attributes): Decode basic-type
+	attributes.
+
+2014-05-25  Alex Harsanyi  <AlexHarsanyi@gmail.com>
+
+	* soap-client.el (soap-get-xs-attributes-from-groups): renamed
+	from soap-xs-attribute-group-consolidate, all callers updated
+	(soap-get-xs-attributes): renamed from
+	soap-xs-attributes-consolidate, all callers updated
+
+2014-05-21  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
+	* soap-client.el (soap-xs-type): Add attribute-group slot.
+	(soap-xs-attribute-group): New type.
+	(soap-xs-parse-attribute-group): New function.
+	(soap-resolve-references-for-xs-attribute-group): Likewise.
+	(soap-xs-add-extension): Handle attribute groups.
+	(soap-resolve-references-for-xs-simple-type): Likewise.
+	(soap-xs-parse-complex-type): Likewise.
+	(soap-xs-parse-extension-or-restriction): Likewise.
+	(soap-resolve-references-for-xs-complex-type): Likewise.
+	(soap-xs-attribute-group-consolidate): New function.
+	(soap-xs-attributes-consolidate): Handle attribute groups.
+	(soap-parse-schema): Likewise.
+
+2014-05-17  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
+	* soap-client.el (soap-encode-xs-basic-type): Fix boolean
+	encoding.
+
+2014-05-04  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
+	* soap-client.el (soap-encode-xs-complex-type): Print ref element
+	names in warnings.
+
+2014-04-27  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
+	* soap-client.el (soap-decode-xs-complex-type): Fix splicing.
+
+2014-04-26  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
+	* soap-client.el (soap-decode-xs-complex-type): Eliminate invalid
+	warnings for choice types.
+
+2014-04-26  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
+	* soap-client.el (soap-encode-xs-complex-type-attributes): Also
+	encode base type attributes.
+
+2014-04-26  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
+	* soap-client.el (soap-encode-xs-complex-type): Fix compilation
+	warning.  Print e-name in warnings, or element if e-name is nil.
+
+2014-04-20  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
+	* soap-client.el (soap-xs-element): Add alternatives slot.
+	(soap-xs-parse-element): Set substitution-group.
+	(soap-resolve-references-for-xs-element): Populate alternatives
+	slot.
+	(soap-get-candidate-elements): New function.
+	(soap-encode-xs-complex-type): Iterate through all candidate
+	elements.  Handle types with nil type indicator.  Fix warning
+	logic.
+
+2014-03-24  Alex Harsanyi  <AlexHarsanyi@gmail.com>
+
+	* soap-client.el (soap-current-wsdl): moved declaration earlier in
+	the file to prevent compiler warning.
+
+2014-03-23  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
+	* soap-client.el (soap-node-optional): New function.
+	(soap-node-multiple): Likewise.
+	(soap-xs-parse-element): Call soap-node-optional and
+	soap-node-multiple.
+	(soap-xs-complex-type): Add optional? and multiple? slots.
+	(soap-xml-get-children-fq): New function.
+	(soap-xs-element-get-fq-name): Likewise.
+	(soap-xs-complex-type-optional-p): Likewise.
+	(soap-xs-complex-type-multiple-p): Likewise.
+	(soap-xs-attributes-consolidate): Likewise.
+	(soap-decode-xs-attributes): Likewise.
+	(soap-decode-xs-complex-type): Decode types with nil type
+	indicator.  Support children that use local namespaces.  Decode
+	attributes.  Add type considerations to optional? and multiple?
+	warnings.
+
+2014-02-04  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
+	* soap-client.el (soap-xs-parse-extension-or-restriction): Store
+	parsed attributes.
+	(soap-encode-xs-complex-type-attributes): Encode custom
+	attributes.
+
+2014-02-04  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
+	* soap-client.el (soap-encode-xs-complex-type-attributes): don't
+	add the xsi:type attribute (Exchange refuses requests which have
+	this attribute)
+
+2013-12-27  Alex Harsanyi  <AlexHarsanyi@gmail.com>
+
+	* soap-client.el, soap-inspect.el: converted to lexical binding,
+	corrected compiler warnings about unused function arguments and
+	local variables.
+
+2013-12-13  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
+	* soap-client.el (soap-decode-xs-complex-type): Handle nil type
+	indicator.
+	(soap-parse-envelope): Handle response headers.
+	(soap-parse-response): Likewise.  Only return non-nil decoded
+	values.
+
+2013-12-12  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
+	* soap-client.el (soap-validate-xs-simple-type): Return validated
+	value.
+
+2013-12-02  Alex Harsanyi  <AlexHarsanyi@gmail.com>
+
+	* soap-client.el (soap-xs-parse-element)
+	(soap-xs-parse-simple-type) 
+	(soap-xs-parse-complex-type)
+	(soap-parse-message)
+	(soap-parse-operation): add the current namespace to the element
+	being created
+	(soap-resolve-references-for-xs-element)
+	(soap-resolve-references-for-xs-simple-type)
+	(soap-resolve-references-for-xs-complex-type)
+	(soap-resolve-references-for-operation): resolve the namespace to
+	the namespace tag
+	(soap-make-wsdl): specify a namespace tag when creating the xsd
+	and soapenc namespaces
+	(soap-wsdl-resolve-references): don't update namespace tags in
+	elements here
+	(soap-parse-port-type): bind the urn: to soap-target-xmlns
+	(soap-encode-body): don't add nil namespace tags to
+	soap-encoded-namespaces
+
+2013-11-25  Alex Harsanyi  <AlexHarsanyi@gmail.com>
+
+	* soap-inspect.el: use `soap-make-wsdl` to construct the object
+	for registering the soap-inspect method.
+
+	Make debbugs tests pass
+
+	* soap-client.el (soap-decode-any-type): use soap-l2fq on the type
+	name, also skip string only nodes when decoding a structure.
+	(soap-xs-parse-complex-type): (BUG) dispatch parsing for choice
+	types too
+	(soap-encode-body): grab the header value from the param table
+
+2013-11-23  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
+	* soap-client.el (soap-should-encode-value-for-xs-element): new
+	function
+	(soap-encode-xs-element): don't encode nil value unless needed
+
+2013-11-17  Alex Harsanyi  <AlexHarsanyi@gmail.com>
+
+	* soap-client.el (soap-bound-operation): new slot `soap-body`
+	(soap-parse-binding): parse the message parts required in the body
+	(soap-encode-body): encode only the parts that are declared to be
+	part of the body
+
+2013-11-15  Alex Harsanyi  <AlexHarsanyi@gmail.com>
+
+	* soap-client.el (soap-encode-xs-element): use the fq name when
+	writing out the tag.
+	(soap-encode-body): remove hack that inserts the xmlns in the
+	element attributes list.
+
+2013-11-14  Alex Harsanyi  <AlexHarsanyi@gmail.com>
+
+	* soap-client.el (soap-xs-attribute): add "default" slot
+	(soap-xs-parse-attribute): default slot is set from the XML
+	"fixed" attribute.
+	(soap-encode-xs-complex-type-attributes): encode any attributes
+	that have a default value.  Also, don't put the xsi:nil attribute
+	when the complex type has no content anyway.
+
+2013-11-04  Alex Harsanyi  <AlexHarsanyi@gmail.com>
+
+	* soap-client.el (soap-well-known-xmlns): add the xml namespace
+	(soap-local-xmlns): start with the xml namespace
+	(soap-xml-node-first-child): skip xsd:annotation nodes too
+	(soap-make-xs-basic-types): more xsd types added
+	(soap-encode-xs-basic-type, soap-decode-xs-basic-type): handle
+	"language", "time", "date", "nonNegativeInteger"
+	(soap-resolve-references-for-xs-element): don't signal an error if
+	the element does not have a type.
+	(soap-xs-parse-simple-type): subtypes are handled with ecase,
+	added stum for xsd:list
+	(soap-xs-add-union): call soap-l2fq on all union members
+	(soap-xs-add-extension): call soap-l2fq on the base member
+	(soap-resolve-references-for-xs-simple-type): don't signal an
+	error if the simple type has no base.
+	(soap-resolve-references-for-xs-simple-type): bugfix, call
+	soap-wsdl-get on each type of the base
+
 2013-04-03  Alex Harsanyi  <AlexHarsanyi@gmail.com>
 
 	* soap-client.el (soap-resolve-references-for-xs-attribute):
