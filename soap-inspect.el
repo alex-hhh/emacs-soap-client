@@ -1,4 +1,4 @@
-;;;; soap-inspect.el -- Interactive inspector for soap WSDL structures
+;;;; soap-inspect.el -- Interactive inspector for soap WSDL structures -*- lexical-binding: t -*-
 
 ;; Copyright (C) 2010-2011  Free Software Foundation, Inc.
 
@@ -223,7 +223,7 @@ entire WSDL can be inspected."
     'face 'link
     'help-echo "mouse-2, RET: browse the previous item"
     'follow-link t
-    'action (lambda (button)
+    'action (lambda (_button)
               (let ((item (pop soap-inspect-previous-items)))
                 (when item
                   (setq soap-inspect-current-item nil)
@@ -462,7 +462,7 @@ TYPE is a `soap-xs-complex-type'"
   (put (aref (make-soap-port) 0) 'soap-inspect
        'soap-inspect-port)
 
-  (put (aref (make-soap-wsdl) 0) 'soap-inspect
+  (put (aref (soap-make-wsdl "origin") 0) 'soap-inspect
        'soap-inspect-wsdl))
 
 (provide 'soap-inspect)
