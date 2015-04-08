@@ -1,3 +1,10 @@
+2015-04-07  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
+	* soap-client.el (soap-xml-node-find-matching-child): Rename from
+	soap-xml-node-first-child.
+	(soap-xs-parse-attribute): Call soap-xml-node-find-matching-child.
+	(soap-xs-parse-simple-type): Likewise.
+
 2014-12-06  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
 
 	* soap-client.el (soap-invoke-async): Add error checking.

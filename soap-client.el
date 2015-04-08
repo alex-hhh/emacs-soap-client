@@ -266,14 +266,12 @@ namespace tag."
         (push c result)))
     (nreverse result)))
 
-(defun soap-xml-node-first-child (node)
-  ;; TODO: this is not a good function, all its users should use a different
-  ;; approach...
-  "Return the first non-text and non annotation child of NODE."
+(defun soap-xml-node-find-matching-child (node set)
+  "Return the first child of NODE whose name is a member of SET."
   (catch 'found
     (dolist (child (xml-node-children node))
       (when (and (consp child)
-                 (not (eq 'xsd:annotation (soap-l2wk (xml-node-name child)))))
+                 (memq (soap-l2wk (xml-node-name child)) set))
         (throw 'found child)))))
 
 (defun soap-xml-get-attribute-or-nil1 (node attribute)
@@ -912,7 +910,8 @@ This is a specialization of `soap-decode-type' for
         (ref (soap-l2fq (xml-get-attribute-or-nil node 'ref))))
     (unless (or type ref)
       (setq type (soap-xs-parse-simple-type
-                  (soap-xml-node-first-child node))))
+                  (soap-xml-node-find-matching-child
+                   node '(xsd:restriction xsd:list xsd:union)))))
     (make-soap-xs-attribute
      :name name :type type :default default :reference ref)))
 
@@ -1031,7 +1030,8 @@ See also `soap-wsdl-resolve-references'."
 
     (let ((type (make-soap-xs-simple-type
                  :name name :namespace-tag soap-target-xmlns :id id))
-          (def (soap-xml-node-first-child node)))
+          (def (soap-xml-node-find-matching-child
+		node '(xsd:restriction xsd:extension xsd:union xsd:list))))
       (ecase (soap-l2wk (xml-node-name def))
         (xsd:restriction (soap-xs-add-restriction def type))
         (xsd:extension (soap-xs-add-extension def type))
