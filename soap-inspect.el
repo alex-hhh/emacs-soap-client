@@ -79,11 +79,23 @@ objects."
             (soap-sample-value (soap-xs-element-type element)))
       (soap-sample-value (soap-xs-element-type element))))
 
+(defun soap-sample-value-for-xs-attribute (attribute)
+  "Provide a sample value for ATTRIBUTE, a WSDL attribute.
+This is a specialization of `soap-sample-value' for
+soap-xs-attribute objects."
+  (if (soap-xs-attribute-name attribute)
+      (cons (intern (soap-xs-attribute-name attribute))
+            (soap-sample-value (soap-xs-attribute-type attribute)))
+    (soap-sample-value (soap-xs-attribute-type attribute))))
+
 (defun soap-sample-value-for-xs-simple-type (type)
   "Provide a sample value for TYPE, a `soap-xs-simple-type'.
 This is a specialization of `soap-sample-value' for
 `soap-xs-simple-type' objects."
-  (cond
+  (append
+   (mapcar 'soap-sample-value-for-xs-attribute
+           (soap-xs-type-attributes type))
+   (cond
     ((soap-xs-simple-type-enumeration type)
      (let ((enumeration (soap-xs-simple-type-enumeration type)))
        (nth (random (length enumeration)) enumeration)))
@@ -108,28 +120,31 @@ This is a specialization of `soap-sample-value' for
      (let ((base (soap-xs-simple-type-base type)))
        (soap-sample-value (nth (random (length base)) base))))
     ((soap-xs-basic-type-p (soap-xs-simple-type-base type))
-     (soap-sample-value (soap-xs-simple-type-base type)))))
+     (soap-sample-value (soap-xs-simple-type-base type))))))
 
 (defun soap-sample-value-for-xs-complex-type (type)
   "Provide a sample value for TYPE, a `soap-xs-complex-type'.
 This is a specialization of `soap-sample-value' for
 `soap-xs-complex-type' objects."
-  (case (soap-xs-complex-type-indicator type)
-    (array
-     (let* ((element-type (soap-xs-complex-type-base type))
-            (sample1 (soap-sample-value element-type))
-            (sample2 (soap-sample-value element-type)))
-       ;; Our sample value is a vector of two elements, but any number of
-       ;; elements are permissible
-       (vector sample1 sample2 '&etc)))
-    ((sequence choice all)
-     (let ((base (soap-xs-complex-type-base type)))
-       (let ((value (append (and base (soap-sample-value base))
-                            (mapcar #'soap-sample-value
-                                    (soap-xs-complex-type-elements type)))))
-         (if (eq (soap-xs-complex-type-indicator type) 'choice)
-             (cons '***choice-of*** value)
-             value))))))
+  (append
+   (mapcar 'soap-sample-value-for-xs-attribute
+           (soap-xs-type-attributes type))
+   (case (soap-xs-complex-type-indicator type)
+     (array
+      (let* ((element-type (soap-xs-complex-type-base type))
+             (sample1 (soap-sample-value element-type))
+             (sample2 (soap-sample-value element-type)))
+        ;; Our sample value is a vector of two elements, but any number of
+        ;; elements are permissible
+        (vector sample1 sample2 '&etc)))
+     ((sequence choice all)
+      (let ((base (soap-xs-complex-type-base type)))
+        (let ((value (append (and base (soap-sample-value base))
+                             (mapcar #'soap-sample-value
+                                     (soap-xs-complex-type-elements type)))))
+          (if (eq (soap-xs-complex-type-indicator type) 'choice)
+              (cons '***choice-of*** value)
+            value)))))))
 
 (defun soap-sample-value-for-message (message)
   "Provide a sample value for a WSDL MESSAGE.
@@ -150,6 +165,10 @@ This is a specialization of `soap-sample-value' for
   (put (aref (make-soap-xs-element) 0)
        'soap-sample-value
        'soap-sample-value-for-xs-element)
+
+  (put (aref (make-soap-xs-attribute) 0)
+       'soap-sample-value
+       'soap-sample-value-for-xs-attribute)
 
   (put (aref (make-soap-xs-simple-type) 0)
        'soap-sample-value
@@ -256,6 +275,15 @@ entire WSDL can be inspected."
   (insert "\nSample value:\n")
   (pp (soap-sample-value element) (current-buffer)))
 
+(defun soap-inspect-xs-attribute (attribute)
+  "Insert information about ATTRIBUTE, a soap-xs-attribute, in
+the current buffer."
+  (insert "Attribute: " (soap-element-fq-name attribute))
+  (insert "\nType: ")
+  (soap-insert-describe-button (soap-xs-attribute-type attribute))
+  (insert "\nSample value:\n")
+  (pp (soap-sample-value attribute) (current-buffer)))
+
 (defun soap-inspect-xs-simple-type (type)
   "Insert information about TYPE, a soap-xs-simple-type, in the current buffer."
   (insert "Simple type: " (soap-element-fq-name type))
@@ -268,6 +296,14 @@ entire WSDL can be inspected."
             (setq first-time nil))
           (soap-insert-describe-button b)))
       (soap-insert-describe-button (soap-xs-simple-type-base type)))
+  (insert "\nAttributes: ")
+  (dolist (attribute (soap-xs-simple-type-attributes type))
+    (let ((name (or (soap-xs-attribute-name attribute) "*inline*"))
+          (type (soap-xs-attribute-type attribute)))
+      (insert "\n\t")
+      (insert name)
+      (insert "\t")
+      (soap-insert-describe-button type)))
   (when (soap-xs-simple-type-enumeration type)
     (insert "\nEnumeraton values: ")
     (dolist (e (soap-xs-simple-type-enumeration type))
@@ -301,6 +337,14 @@ TYPE is a `soap-xs-complex-type'"
      (when (soap-xs-complex-type-base type)
        (insert "extending ")
        (soap-insert-describe-button (soap-xs-complex-type-base type)))
+     (insert "\nAttributes: ")
+     (dolist (attribute (soap-xs-complex-type-attributes type))
+       (let ((name (or (soap-xs-attribute-name attribute) "*inline*"))
+             (type (soap-xs-attribute-type attribute)))
+         (insert "\n\t")
+         (insert name)
+         (insert "\t")
+         (soap-insert-describe-button type)))
      (insert "\nElements: ")
      (let ((name-width 0)
            (type-width 0))
@@ -447,6 +491,9 @@ TYPE is a `soap-xs-complex-type'"
 
   (put (aref (make-soap-xs-complex-type) 0) 'soap-inspect
        'soap-inspect-xs-complex-type)
+
+  (put (aref (make-soap-xs-attribute) 0) 'soap-inspect
+       'soap-inspect-xs-attribute)
 
   (put (aref (make-soap-message) 0) 'soap-inspect
        'soap-inspect-message)

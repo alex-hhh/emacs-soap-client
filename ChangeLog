@@ -1,5 +1,16 @@
 2015-09-25  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
 
+	* soap-inspect.el (soap-sample-value-for-xs-attribute): New
+	function.
+	(soap-sample-value-for-xs-simple-type): Prepend attributes to
+	result.
+	(soap-sample-value-for-xs-complex-type): Likewise.
+	(soap-inspect-xs-attribute): New function.
+	(soap-inspect-xs-simple-type): Print attributes.
+	(soap-inspect-xs-complex-type): Likewise.
+
+2015-09-25  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
 	* soap-inspect.el (soap-resolve-references-for-xs-simple-type):
 	Resolve references for attributes.
 	(soap-resolve-references-for-xs-complex-type): Likewise.
