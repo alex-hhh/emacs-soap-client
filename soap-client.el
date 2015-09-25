@@ -1281,6 +1281,8 @@ See also `soap-wsdl-resolve-references'."
                              type)))
                     base)))
      (t (error "Oops"))))
+  (dolist (attribute (soap-xs-type-attributes type))
+    (soap-resolve-references attribute wsdl))
   (dolist (attribute-group (soap-xs-type-attribute-groups type))
     (soap-resolve-references attribute-group wsdl)))
 
@@ -1523,6 +1525,8 @@ See also `soap-wsdl-resolve-references'."
         (soap-resolve-references element wsdl)
         (push element all-elements)))
     (setf (soap-xs-complex-type-elements type) (nreverse all-elements)))
+  (dolist (attribute (soap-xs-type-attributes type))
+    (soap-resolve-references attribute wsdl))
   (dolist (attribute-group (soap-xs-type-attribute-groups type))
     (soap-resolve-references attribute-group wsdl)))
 

@@ -1,3 +1,9 @@
+2015-09-25  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
+	* soap-inspect.el (soap-resolve-references-for-xs-simple-type):
+	Resolve references for attributes.
+	(soap-resolve-references-for-xs-complex-type): Likewise.
+
 2015-04-07  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
 
 	* soap-client.el (soap-xml-node-find-matching-child): Rename from
