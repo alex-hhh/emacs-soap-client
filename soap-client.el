@@ -1042,7 +1042,7 @@ See also `soap-wsdl-resolve-references'."
     (let ((type (make-soap-xs-simple-type
                  :name name :namespace-tag soap-target-xmlns :id id))
           (def (soap-xml-node-find-matching-child
-		node '(xsd:restriction xsd:extension xsd:union xsd:list))))
+                node '(xsd:restriction xsd:extension xsd:union xsd:list))))
       (ecase (soap-l2wk (xml-node-name def))
         (xsd:restriction (soap-xs-add-restriction def type))
         (xsd:extension (soap-xs-add-extension def type))
@@ -3005,12 +3005,13 @@ OPERATION-NAME and PARAMETERS are as described in `soap-invoke'."
               'utf-8))
             (url-mime-charset-string "utf-8;q=1, iso-8859-1;q=0.5")
             (url-http-attempt-keepalives t)
-            (url-request-extra-headers (list
-                                        (cons "SOAPAction"
-                                              (concat "\"" (soap-bound-operation-soap-action
-							    operation) "\""))
-                                        (cons "Content-Type"
-                                              "text/xml; charset=utf-8"))))
+            (url-request-extra-headers
+             (list
+              (cons "SOAPAction"
+                    (concat "\"" (soap-bound-operation-soap-action
+                                  operation) "\""))
+              (cons "Content-Type"
+                    "text/xml; charset=utf-8"))))
         (if callback
             (url-retrieve
              (soap-port-service-url port)
