@@ -904,10 +904,11 @@ This is a specialization of `soap-decode-type' for
   "Construct a `soap-xs-attribute' from NODE."
   (assert (eq (soap-l2wk (xml-node-name node)) 'xsd:attribute)
           "expecting xsd:attribute, got %s" (soap-l2wk (xml-node-name node)))
-  (let ((name (xml-get-attribute-or-nil node 'name))
-        (type (soap-l2fq (xml-get-attribute-or-nil node 'type)))
-        (default (xml-get-attribute-or-nil node 'fixed))
-        (ref (soap-l2fq (xml-get-attribute-or-nil node 'ref))))
+  (let* ((name (xml-get-attribute-or-nil node 'name))
+	 (type (soap-l2fq (xml-get-attribute-or-nil node 'type)))
+	 (default (xml-get-attribute-or-nil node 'fixed))
+	 (attribute (xml-get-attribute-or-nil node 'ref))
+	 (ref (when attribute (soap-l2fq attribute))))
     (unless (or type ref)
       (setq type (soap-xs-parse-simple-type
                   (soap-xml-node-find-matching-child
@@ -1714,7 +1715,7 @@ Return nil otherwise."
               (soap-xs-complex-type-base type))))))
 
 (defun soap-get-xs-attributes-from-groups (attribute-groups)
-  "Return a list of atrributes from all ATTRIBUTE-GROUPS."
+  "Return a list of attributes from all ATTRIBUTE-GROUPS."
   (let (attributes)
     (dolist (group attribute-groups)
       (let ((sub-groups (soap-xs-attribute-group-attribute-groups group)))
