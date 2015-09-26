@@ -1,5 +1,10 @@
 2015-09-26  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
 
+	* soap-client.el (soap-decode-xs-attributes): Process attribute
+	type directly, not through soap-wsdl-get.
+
+2015-09-26  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
 	* soap-client.el (soap-xs-parse-attribute): Leave reference nil if
 	reference attribute is nil.
 

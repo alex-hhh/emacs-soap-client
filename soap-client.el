@@ -1740,10 +1740,9 @@ Return nil otherwise."
   (let (result)
     (dolist (attribute (soap-get-xs-attributes type))
       (let* ((name (soap-xs-attribute-name attribute))
-             (fq-name (soap-xs-attribute-type attribute))
+             (attribute-type (soap-xs-attribute-type attribute))
              (symbol (intern name))
-             (value (xml-get-attribute-or-nil node symbol))
-             (attribute-type (soap-wsdl-get fq-name soap-current-wsdl)))
+             (value (xml-get-attribute-or-nil node symbol)))
         ;; We don't support attribute uses: required, optional, prohibited.
         (cond
          ((soap-xs-basic-type-p attribute-type)
@@ -1763,7 +1762,7 @@ Return nil otherwise."
          (t
           (error (concat "Attribute %s is of type %s which is"
                          " not a basic or simple type")
-                 name (cdr fq-name))))))
+                 name (soap-name-p attribute))))))
     result))
 
 (defun soap-decode-xs-complex-type (type node)
