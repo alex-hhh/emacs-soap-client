@@ -905,10 +905,10 @@ This is a specialization of `soap-decode-type' for
   (assert (eq (soap-l2wk (xml-node-name node)) 'xsd:attribute)
           "expecting xsd:attribute, got %s" (soap-l2wk (xml-node-name node)))
   (let* ((name (xml-get-attribute-or-nil node 'name))
-	 (type (soap-l2fq (xml-get-attribute-or-nil node 'type)))
-	 (default (xml-get-attribute-or-nil node 'fixed))
-	 (attribute (xml-get-attribute-or-nil node 'ref))
-	 (ref (when attribute (soap-l2fq attribute))))
+         (type (soap-l2fq (xml-get-attribute-or-nil node 'type)))
+         (default (xml-get-attribute-or-nil node 'fixed))
+         (attribute (xml-get-attribute-or-nil node 'ref))
+         (ref (when attribute (soap-l2fq attribute))))
     (unless (or type ref)
       (setq type (soap-xs-parse-simple-type
                   (soap-xml-node-find-matching-child
@@ -993,6 +993,8 @@ See also `soap-wsdl-resolve-references'."
     (when (soap-name-p reference)
       (let ((resolved (soap-wsdl-get reference wsdl
                                      'soap-xs-attribute-group-p)))
+        (dolist (attribute (soap-xs-attribute-group-attributes resolved))
+          (soap-resolve-references attribute wsdl))
         (setf (soap-xs-attribute-group-name attribute-group)
               (soap-xs-attribute-group-name resolved))
         (setf (soap-xs-attribute-group-id attribute-group)

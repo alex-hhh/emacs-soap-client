@@ -1,5 +1,11 @@
 2015-09-26  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
 
+	* soap-inspect.el
+	(soap-resolve-references-for-xs-attribute-group): Resolve
+	references of attributes in an attribute group.
+
+2015-09-26  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
 	* soap-client.el (soap-decode-xs-attributes): Process attribute
 	type directly, not through soap-wsdl-get.
 
