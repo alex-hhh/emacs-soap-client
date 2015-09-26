@@ -1,3 +1,8 @@
+2015-09-26  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
+	* soap-client.el (soap-resolve-references-for-xs-attribute):
+	Convert XML schema attributes to xsd:string.
+
 2015-09-25  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
 
 	* soap-inspect.el (soap-sample-value-for-xs-attribute): New

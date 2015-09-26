@@ -952,8 +952,20 @@ This is a specialization of `soap-resolve-references' for
 `soap-xs-attribute' objects.
 
 See also `soap-wsdl-resolve-references'."
-  (let ((type (soap-xs-attribute-type attribute)))
-    (cond ((soap-name-p type)
+  (let* ((type (soap-xs-attribute-type attribute))
+         (reference (soap-xs-attribute-reference attribute))
+         (predicate 'soap-xs-element-p)
+         (xml-reference
+          (and (soap-name-p reference)
+               (equal (car reference) "http://www.w3.org/XML/1998/namespace"))))
+    (cond (xml-reference
+           ;; Convert references to attributes defined by the XML
+           ;; schema (xml:base, xml:lang, xml:space and xml:id) to
+           ;; xsd:string, to avoid needing to bundle and parse
+           ;; xml.xsd.
+           (setq reference '("http://www.w3.org/2001/XMLSchema" . "string"))
+           (setq predicate 'soap-xs-basic-type-p))
+          ((soap-name-p type)
            (setf (soap-xs-attribute-type attribute)
                  (soap-wsdl-get type wsdl
                                 (lambda (type)
@@ -962,11 +974,10 @@ See also `soap-wsdl-resolve-references'."
           ((soap-xs-type-p type)
            ;; an inline defined type, this will not be reached from anywhere
            ;; else, so we must resolve references now.
-           (soap-resolve-references type wsdl))))
-  (let ((reference (soap-xs-attribute-reference attribute)))
+           (soap-resolve-references type wsdl)))
     (when (soap-name-p reference)
       (setf (soap-xs-attribute-reference attribute)
-            (soap-wsdl-get reference wsdl 'soap-xs-element-p)))))
+            (soap-wsdl-get reference wsdl predicate)))))
 
 (put (aref (make-soap-xs-attribute) 0)
      'soap-resolve-references #'soap-resolve-references-for-xs-attribute)
