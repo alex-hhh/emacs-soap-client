@@ -1,5 +1,10 @@
 2015-09-26  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
 
+	* soap-inspect.el (soap-inspect-xs-attribute-group): Do not print
+	type for attribute group.
+
+2015-09-26  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
 	* soap-inspect.el (soap-sample-value-for-xs-attribute-group): New
 	function.
 	(soap-inspect-xs-attribute-group): Likewise.

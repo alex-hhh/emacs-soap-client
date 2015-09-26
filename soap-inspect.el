@@ -309,8 +309,6 @@ the current buffer."
   "Insert information about ATTRIBUTE-GROUP, a
 soap-xs-attribute-group, in the current buffer."
   (insert "Attribute group: " (soap-element-fq-name attribute-group))
-  (insert "\nType: ")
-  (soap-insert-describe-button (soap-xs-attribute-group-type attribute-group))
   (insert "\nSample values:\n")
   (pp (soap-sample-value attribute-group) (current-buffer)))
 
