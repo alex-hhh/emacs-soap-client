@@ -88,6 +88,23 @@ soap-xs-attribute objects."
             (soap-sample-value (soap-xs-attribute-type attribute)))
     (soap-sample-value (soap-xs-attribute-type attribute))))
 
+(defun soap-sample-value-for-xs-attribute-group (attribute-group)
+  "Provide a sample value for ATTRIBUTE-GROUP, a WSDL attribute group.
+This is a specialization of `soap-sample-value' for
+soap-xs-attribute objects."
+  (let ((sample-values nil))
+    (dolist (attribute (soap-xs-attribute-group-attributes attribute-group))
+      (if (soap-xs-attribute-name attribute)
+          (setq sample-values
+                (append sample-values
+                        (cons (intern (soap-xs-attribute-name attribute))
+                              (soap-sample-value (soap-xs-attribute-type
+                                                  attribute)))))
+        (setq sample-values
+              (append sample-values
+                      (soap-sample-value
+                       (soap-xs-attribute-type attribute))))))))
+
 (defun soap-sample-value-for-xs-simple-type (type)
   "Provide a sample value for TYPE, a `soap-xs-simple-type'.
 This is a specialization of `soap-sample-value' for
@@ -169,6 +186,10 @@ This is a specialization of `soap-sample-value' for
   (put (aref (make-soap-xs-attribute) 0)
        'soap-sample-value
        'soap-sample-value-for-xs-attribute)
+
+  (put (aref (make-soap-xs-attribute) 0)
+       'soap-sample-value
+       'soap-sample-value-for-xs-attribute-group)
 
   (put (aref (make-soap-xs-simple-type) 0)
        'soap-sample-value
@@ -283,6 +304,15 @@ the current buffer."
   (soap-insert-describe-button (soap-xs-attribute-type attribute))
   (insert "\nSample value:\n")
   (pp (soap-sample-value attribute) (current-buffer)))
+
+(defun soap-inspect-xs-attribute-group (attribute-group)
+  "Insert information about ATTRIBUTE-GROUP, a
+soap-xs-attribute-group, in the current buffer."
+  (insert "Attribute group: " (soap-element-fq-name attribute-group))
+  (insert "\nType: ")
+  (soap-insert-describe-button (soap-xs-attribute-group-type attribute-group))
+  (insert "\nSample values:\n")
+  (pp (soap-sample-value attribute-group) (current-buffer)))
 
 (defun soap-inspect-xs-simple-type (type)
   "Insert information about TYPE, a soap-xs-simple-type, in the current buffer."
@@ -494,6 +524,9 @@ TYPE is a `soap-xs-complex-type'"
 
   (put (aref (make-soap-xs-attribute) 0) 'soap-inspect
        'soap-inspect-xs-attribute)
+
+  (put (aref (make-soap-xs-attribute-group) 0) 'soap-inspect
+       'soap-inspect-xs-attribute-group)
 
   (put (aref (make-soap-message) 0) 'soap-inspect
        'soap-inspect-message)

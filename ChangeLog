@@ -1,5 +1,11 @@
 2015-09-26  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
 
+	* soap-inspect.el (soap-sample-value-for-xs-attribute-group): New
+	function.
+	(soap-inspect-xs-attribute-group): Likewise.
+
+2015-09-26  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
 	* soap-inspect.el
 	(soap-resolve-references-for-xs-attribute-group): Resolve
 	references of attributes in an attribute group.
