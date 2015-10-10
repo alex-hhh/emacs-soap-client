@@ -842,6 +842,11 @@ This is a specialization of `soap-encode-attributes' for
    ;; otherwise, we don't need to encode it
    (t nil)))
 
+(defun soap-type-is-array? (type)
+  "Return t if TYPE defines an ARRAY."
+  (and (soap-xs-complex-type-p type)
+       (eq (soap-xs-complex-type-indicator type) 'array)))
+
 (defun soap-encode-xs-element (value element)
   "Encode the VALUE according to ELEMENT.
 The data is inserted in the current buffer at the current
@@ -866,7 +871,21 @@ This is a specialization of `soap-encode-value' for
             (if (or value (and (soap-xs-basic-type-p type)
                                (eq (soap-xs-basic-type-kind type) 'boolean)))
                 (progn (insert ">")
-                       (soap-encode-value value type)
+                       ;; ARRAY's need special treatment, as each element of
+                       ;; the array is encoded with the same tag as the
+                       ;; current element...
+                       (if (soap-type-is-array? type)
+                           (let ((new-element (copy-soap-xs-element element)))
+                             (when (soap-element-namespace-tag type)
+                               (add-to-list 'soap-encoded-namespaces
+                                            (soap-element-namespace-tag type)))
+                             (setf (soap-xs-element-type^ new-element)
+                                   (soap-xs-complex-type-base type))
+                             (loop for i below (length value)
+                                do (progn
+                                     (soap-encode-xs-element (aref value i) new-element)
+                                     )))
+                           (soap-encode-value value type))
                        (insert "</" fq-name ">\n"))
               ;; else
               (insert "/>\n"))))
@@ -1597,13 +1616,7 @@ This is a specialization of `soap-encode-value' for
 `soap-xs-complex-type' objects."
   (case (soap-xs-complex-type-indicator type)
     (array
-     (let ((tag (soap-xs-complex-type-name type))
-           (element-type (soap-xs-complex-type-base type)))
-       (loop for i below (length value)
-             do (progn
-                  (insert "<" tag ">")
-                  (soap-encode-value (aref value i) element-type)
-                  (insert "</" tag ">")))))
+     (error "soap-encode-xs-complex-type arrays are handled elsewhere"))
     ((sequence choice all nil)
      (let ((type-list (list type)))
 

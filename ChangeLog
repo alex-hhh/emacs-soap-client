@@ -1,3 +1,10 @@
+2015-10-10  Alex Harsanyi  <AlexHarsanyi@gmail.com>
+
+	* soap-client.el (soap-type-is-array?): new defun
+	(soap-encode-xs-element): handle array elements in this function
+	(soap-encode-xs-complex-type): flag error if asked to encode an
+	array type, this is handled in `soap-encode-xs-element'
+
 2015-09-26  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
 
 	* soap-inspect.el (soap-inspect-xs-attribute-group): Do not print
