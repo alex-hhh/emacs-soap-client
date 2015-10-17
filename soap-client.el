@@ -847,6 +847,14 @@ This is a specialization of `soap-encode-attributes' for
   (and (soap-xs-complex-type-p type)
        (eq (soap-xs-complex-type-indicator type) 'array)))
 
+(defvar soap-encoded-namespaces nil
+  "A list of namespace tags used during encoding a message.
+This list is populated by `soap-encode-value' and used by
+`soap-create-envelope' to add aliases for these namespace to the
+XML request.
+
+This variable is dynamically bound in `soap-create-envelope'.")
+
 (defun soap-encode-xs-element (value element)
   "Encode the VALUE according to ELEMENT.
 The data is inserted in the current buffer at the current
@@ -2852,14 +2860,6 @@ reference multiRef parts which are external to RESPONSE-NODE."
         decoded-parts))))
 
 ;;;; SOAP type encoding
-
-(defvar soap-encoded-namespaces nil
-  "A list of namespace tags used during encoding a message.
-This list is populated by `soap-encode-value' and used by
-`soap-create-envelope' to add aliases for these namespace to the
-XML request.
-
-This variable is dynamically bound in `soap-create-envelope'.")
 
 (defun soap-encode-attributes (value type)
   "Encode XML attributes for VALUE according to TYPE.
