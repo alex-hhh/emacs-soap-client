@@ -1,3 +1,32 @@
+2015-10-22  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
+	* soap-client.el, soap-inspect.el: Bump version to 3.0.0.
+
+2015-10-22  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
+	* soap-inspect.el: Merge in changes from Emacs master branch.
+
+2015-10-22  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
+	* soap-client.el: Merge in changes from Emacs master branch.
+
+2015-10-22  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
+	* soap-inspect.el: Shorten first line description.
+
+2015-10-21  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
+	* soap-client.el: Make a small whitespace fix.
+
+2015-10-21  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
+	* soap-inspect.el: Update copyright years.
+
+2015-10-17  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
+	* soap-client.el (soap-encoded-namespaces): Move above first use
+	in soap-encode-xs-element.
+
 2015-10-10  Alex Harsanyi  <AlexHarsanyi@gmail.com>
 
 	* soap-client.el (soap-type-is-array?): new defun
