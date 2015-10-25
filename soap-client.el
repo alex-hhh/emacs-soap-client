@@ -8,7 +8,7 @@
 ;; Version: 3.0.0
 ;; Keywords: soap, web-services, comm, hypermedia
 ;; Package: soap-client
-;; Homepage: http://code.google.com/p/emacs-soap-client
+;; Homepage: https://github.com/alex-hhh/emacs-soap-client
 
 ;; This file is part of GNU Emacs.
 
