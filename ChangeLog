@@ -1,5 +1,9 @@
 2015-10-25  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
 
+	* soap-client.el, soap-inspect.el: Bump version to 3.0.1.
+
+2015-10-25  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
 	* soap-client.el, soap-inspect.el: Update home page.
 
 2015-10-22  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
