@@ -9,6 +9,7 @@
 ;; Keywords: soap, web-services, comm, hypermedia
 ;; Package: soap-client
 ;; Homepage: https://github.com/alex-hhh/emacs-soap-client
+;; Package-Requires: ((cl-lib "0.5"))
 
 ;; This file is part of GNU Emacs.
 
@@ -43,6 +44,7 @@
 ;;; Code:
 
 (eval-when-compile (require 'cl))
+(require 'cl-lib)
 
 (require 'xml)
 (require 'xsd-regexp)
@@ -1246,9 +1248,9 @@ See also `soap-wsdl-resolve-references'."
               (error (push (cadr error-object) messages))))
           (when messages
             (error (mapconcat 'identity (nreverse messages) "; and: "))))
-      (cl-flet ((fail-with-message (format value)
-                                   (push (format format value) messages)
-                                   (throw 'invalid nil)))
+      (cl-labels ((fail-with-message (format value)
+				     (push (format format value) messages)
+				     (throw 'invalid nil)))
         (catch 'invalid
           (let ((enumeration (soap-xs-simple-type-enumeration type)))
             (when (and (> (length enumeration) 1)

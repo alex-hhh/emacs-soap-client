@@ -1,5 +1,10 @@
 2015-11-08  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
 
+	* soap-client.el: Add cl-lib to Package-Requires.  Require cl-lib.
+	(soap-validate-xs-simple-type): Use cl-labels instead of cl-flet.
+
+2015-11-08  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
 	* soap-client.el: Support Emacs versions that do not have
 	define-error.
 
