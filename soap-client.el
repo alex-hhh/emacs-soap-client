@@ -2753,7 +2753,14 @@ decode function to perform the actual decoding."
 
 ;;;; Soap Envelope parsing
 
-(define-error 'soap-error "SOAP error")
+(if (fboundp 'define-error)
+    (define-error 'soap-error "SOAP error")
+  ;; Support older Emacs versions that do not have define-error, so
+  ;; that soap-client can remain unchanged in GNU ELPA.
+  (put 'soap-error
+       'error-conditions
+       '(error soap-error))
+  (put 'soap-error 'error-message "SOAP error"))
 
 (defun soap-parse-envelope (node operation wsdl)
   "Parse the SOAP envelope in NODE and return the response.
