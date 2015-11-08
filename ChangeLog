@@ -1,5 +1,9 @@
 2015-11-08  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
 
+	* soap-inspect.el: Remove version header.
+
+2015-11-08  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
 	* soap-client.el, soap-inspect.el, jira2.el: Fix first line header
 	format.
 
