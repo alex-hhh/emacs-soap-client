@@ -1,4 +1,4 @@
-;;;; soap-inspect.el -- Interactive WSDL inspector    -*- lexical-binding: t -*-
+;;; soap-inspect.el --- Interactive WSDL inspector    -*- lexical-binding: t -*-
 
 ;; Copyright (C) 2010-2015 Free Software Foundation, Inc.
 

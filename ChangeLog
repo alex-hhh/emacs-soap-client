@@ -1,3 +1,8 @@
+2015-11-08  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
+	* soap-client.el, soap-inspect.el, jira2.el: Fix first line header
+	format.
+
 2015-10-25  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
 
 	* soap-client.el, soap-inspect.el: Bump version to 3.0.1.
