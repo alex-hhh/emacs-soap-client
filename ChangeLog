@@ -1,5 +1,9 @@
 2015-11-11  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
 
+	* soap-client.el: Bump version to 3.0.2.
+
+2015-11-11  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
 	* soap-client.el (soap-warning): Use format, not format-message.
 
 2015-11-08  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
