@@ -59,8 +59,8 @@
 
 (defsubst soap-warning (message &rest args)
   "Display a warning MESSAGE with ARGS, using the 'soap-client warning type."
-  (display-warning 'soap-client (apply #'format-message message args)
-                   :warning))
+  ;; Do not use #'format-message, to support older Emacs versions.
+  (display-warning 'soap-client (apply #'format message args) :warning))
 
 (defgroup soap-client nil
   "Access SOAP web services from Emacs."
