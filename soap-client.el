@@ -1,12 +1,15 @@
-;;;; soap-client.el -- Access SOAP web services       -*- lexical-binding: t -*-
-;; Copyright (C) 2009-2015  Free Software Foundation, Inc.
+;;; soap-client.el --- Access SOAP web services       -*- lexical-binding: t -*-
+
+;; Copyright (C) 2009-2015 Free Software Foundation, Inc.
 
 ;; Author: Alexandru Harsanyi <AlexHarsanyi@gmail.com>
 ;; Author: Thomas Fitzsimmons <fitzsim@fitzsim.org>
 ;; Created: December, 2009
+;; Version: 3.0.2
 ;; Keywords: soap, web-services, comm, hypermedia
 ;; Package: soap-client
-;; Homepage: http://code.google.com/p/emacs-soap-client
+;; Homepage: https://github.com/alex-hhh/emacs-soap-client
+;; Package-Requires: ((cl-lib "0.5"))
 
 ;; This file is part of GNU Emacs.
 
@@ -41,6 +44,7 @@
 ;;; Code:
 
 (eval-when-compile (require 'cl))
+(require 'cl-lib)
 
 (require 'xml)
 (require 'xsd-regexp)
@@ -55,10 +59,12 @@
 
 (defsubst soap-warning (message &rest args)
   "Display a warning MESSAGE with ARGS, using the 'soap-client warning type."
-  (display-warning 'soap-client (apply 'format message args) :warning))
+  ;; Do not use #'format-message, to support older Emacs versions.
+  (display-warning 'soap-client (apply #'format message args) :warning))
 
 (defgroup soap-client nil
   "Access SOAP web services from Emacs."
+  :version "24.1"
   :group 'tools)
 
 ;;;; Support for parsing XML documents with namespaces
@@ -174,7 +180,7 @@ namespace of LOCAL-NAME."
   "Convert LOCAL-NAME into a fully qualified name.
 A fully qualified name is a cons of the namespace name and the
 name of the element itself.  For example \"xsd:string\" is
-converted to \(\"http://www.w3.org/2001/XMLSchema\" . \"string\"\).
+converted to (\"http://www.w3.org/2001/XMLSchema\" . \"string\").
 
 The USE-TNS argument specifies what to do when LOCAL-NAME has no
 namespace tag.  If USE-TNS is non-nil, the `soap-target-xmlns'
@@ -386,7 +392,7 @@ binding) but the same name."
 
 ;; SOAP WSDL documents use XML Schema to define the types that are part of the
 ;; message exchange.  We include here an XML schema model with a parser and
-;; serializer/deserialiser.
+;; serializer/deserializer.
 
 (defstruct (soap-xs-type (:include soap-element))
   id
@@ -706,7 +712,7 @@ This is a specialization of `soap-decode-type' for
 (defun soap-xs-element-type (element)
   "Retrieve the type of ELEMENT.
 This is normally stored in the TYPE^ slot, but if this element
-contains a reference, we retrive the type of the reference."
+contains a reference, retrieve the type of the reference."
   (if (soap-xs-element-reference element)
       (soap-xs-element-type (soap-xs-element-reference element))
     (soap-xs-element-type^ element)))
@@ -846,6 +852,14 @@ This is a specialization of `soap-encode-attributes' for
   "Return t if TYPE defines an ARRAY."
   (and (soap-xs-complex-type-p type)
        (eq (soap-xs-complex-type-indicator type) 'array)))
+
+(defvar soap-encoded-namespaces nil
+  "A list of namespace tags used during encoding a message.
+This list is populated by `soap-encode-value' and used by
+`soap-create-envelope' to add aliases for these namespace to the
+XML request.
+
+This variable is dynamically bound in `soap-create-envelope'.")
 
 (defun soap-encode-xs-element (value element)
   "Encode the VALUE according to ELEMENT.
@@ -1234,9 +1248,9 @@ See also `soap-wsdl-resolve-references'."
               (error (push (cadr error-object) messages))))
           (when messages
             (error (mapconcat 'identity (nreverse messages) "; and: "))))
-      (cl-flet ((fail-with-message (format value)
-                                   (push (format format value) messages)
-                                   (throw 'invalid nil)))
+      (cl-labels ((fail-with-message (format value)
+				     (push (format format value) messages)
+				     (throw 'invalid nil)))
         (catch 'invalid
           (let ((enumeration (soap-xs-simple-type-enumeration type)))
             (when (and (> (length enumeration) 1)
@@ -1977,7 +1991,7 @@ This is a specialization of `soap-decode-type' for
   )
 
 (defun soap-make-wsdl (origin)
-  "Create a new WSDL document, loaded from ORIGIN, and intialize it."
+  "Create a new WSDL document, loaded from ORIGIN, and initialize it."
   (let ((wsdl (soap-make-wsdl^ :origin origin)))
 
     ;; Add the XSD types to the wsdl document
@@ -2033,9 +2047,9 @@ structure predicate for the type of element you want to retrieve.
 For example, to retrieve a message named \"foo\" when other
 elements named \"foo\" exist in the WSDL you could use:
 
-  (soap-wsdl-get \"foo\" WSDL 'soap-message-p)
+  (soap-wsdl-get \"foo\" WSDL \\='soap-message-p)
 
-If USE-LOCAL-ALIAS-TABLE is not nil, `soap-local-xmlns` will be
+If USE-LOCAL-ALIAS-TABLE is not nil, `soap-local-xmlns' will be
 used to resolve the namespace alias."
   (let ((alias-table (soap-wsdl-alias-table wsdl))
         namespace element-name element)
@@ -2741,10 +2755,14 @@ decode function to perform the actual decoding."
 
 ;;;; Soap Envelope parsing
 
-(put 'soap-error
-     'error-conditions
-     '(error soap-error))
-(put 'soap-error 'error-message "SOAP error")
+(if (fboundp 'define-error)
+    (define-error 'soap-error "SOAP error")
+  ;; Support older Emacs versions that do not have define-error, so
+  ;; that soap-client can remain unchanged in GNU ELPA.
+  (put 'soap-error
+       'error-conditions
+       '(error soap-error))
+  (put 'soap-error 'error-message "SOAP error"))
 
 (defun soap-parse-envelope (node operation wsdl)
   "Parse the SOAP envelope in NODE and return the response.
@@ -2852,14 +2870,6 @@ reference multiRef parts which are external to RESPONSE-NODE."
         decoded-parts))))
 
 ;;;; SOAP type encoding
-
-(defvar soap-encoded-namespaces nil
-  "A list of namespace tags used during encoding a message.
-This list is populated by `soap-encode-value' and used by
-`soap-create-envelope' to add aliases for these namespace to the
-XML request.
-
-This variable is dynamically bound in `soap-create-envelope'.")
 
 (defun soap-encode-attributes (value type)
   "Encode XML attributes for VALUE according to TYPE.
@@ -3117,9 +3127,9 @@ OPERATION-NAME and PARAMETERS are as described in `soap-invoke'."
 (provide 'soap-client)
 
 
-;;; Local Variables:
-;;; mode: outline-minor
-;;; outline-regexp: ";;;;+"
-;;; End:
+;; Local Variables:
+;; eval: (outline-minor-mode 1)
+;; outline-regexp: ";;;;+"
+;; End:
 
 ;;; soap-client.el ends here

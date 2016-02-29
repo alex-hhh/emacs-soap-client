@@ -1,4 +1,4 @@
-;;; jira2.el -- Provide connectivity to JIRA SOAP service
+;;; jira2.el --- Provide connectivity to JIRA SOAP service
 
 ;; Copyright (C) 2009  Alex Harsanyi <AlexHarsanyi@gmail.com>
 
