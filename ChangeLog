@@ -1,3 +1,9 @@
+2016-02-29  Alex Harsanyi  <AlexHarsanyi@gmail.com>
+
+	* soap-client.el (soap-find-port, soap-find-operation)
+	(soap-operation-arity): new defuns
+	(soap-invoke-internal): use soap-find-port, soap-find-operation.
+
 2015-10-10  Alex Harsanyi  <AlexHarsanyi@gmail.com>
 
 	* soap-client.el (soap-type-is-array?): new defun

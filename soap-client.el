@@ -2989,6 +2989,31 @@ http://schemas.xmlsoap.org/soap/encoding/\"\n"))
   :type 'boolean
   :group 'soap-client)
 
+(defun soap-find-port (wsdl service)
+  "Return the WSDL port having SERVICE name.
+Signal an error if not found"
+  (or (catch 'found
+        (dolist (p (soap-wsdl-ports wsdl))
+          (when (equal service (soap-element-name p))
+            (throw 'found p))))
+      (error "Unknown SOAP service: %s" service))) 
+
+(defun soap-find-operation (port opname)
+  "Find an operation inside PORT, a `soap-port-type'.
+Signal an error if not found"
+  (let* ((binding (soap-port-binding port))
+         (op (gethash opname (soap-binding-operations binding))))
+    (or op
+        (error "No operation %s for SOAP service %s"
+               opname (soap-element-name port)))))
+
+(defun soap-operation-arity (wsdl service opname)
+  "Return the number of arguments required by a soap operation."
+  (let* ((port (soap-find-port wsdl service))
+         (op (soap-find-operation port opname))
+         (bop (soap-bound-operation-operation op)))
+    (length (soap-operation-parameter-order bop))))
+
 (defun soap-invoke-internal (callback cbargs wsdl service operation-name
                                       &rest parameters)
   "Implement `soap-invoke' and `soap-invoke-async'.
@@ -2996,54 +3021,43 @@ If CALLBACK is non-nil, operate asynchronously, then call CALLBACK as (apply
 CALLBACK RESPONSE CBARGS), where RESPONSE is the SOAP invocation result.
 If CALLBACK is nil, operate synchronously.  WSDL, SERVICE,
 OPERATION-NAME and PARAMETERS are as described in `soap-invoke'."
-  (let ((port (catch 'found
-                (dolist (p (soap-wsdl-ports wsdl))
-                  (when (equal service (soap-element-name p))
-                    (throw 'found p))))))
-    (unless port
-      (error "Unknown SOAP service: %s" service))
-
-    (let* ((binding (soap-port-binding port))
-           (operation (gethash operation-name
-                               (soap-binding-operations binding))))
-      (unless operation
-        (error "No operation %s for SOAP service %s" operation-name service))
-
-      (let ((url-request-method "POST")
-            (url-package-name "soap-client.el")
-            (url-package-version "1.0")
-            (url-request-data
-             ;; url-request-data expects a unibyte string already encoded...
-             (encode-coding-string
-              (soap-create-envelope operation parameters wsdl
-                                    (soap-port-service-url port))
-              'utf-8))
-            (url-mime-charset-string "utf-8;q=1, iso-8859-1;q=0.5")
-            (url-http-attempt-keepalives t)
-            (url-request-extra-headers
-             (list
-              (cons "SOAPAction"
-                    (concat "\"" (soap-bound-operation-soap-action
-                                  operation) "\""))
-              (cons "Content-Type"
-                    "text/xml; charset=utf-8"))))
-        (if callback
-            (url-retrieve
-             (soap-port-service-url port)
-             (lambda (status)
-               (let ((data-buffer (current-buffer)))
-                 (unwind-protect
-                     (let ((error-status (plist-get status :error)))
-                       (if error-status
-                           (signal (car error-status) (cdr error-status))
-                         (apply callback
-                                (soap-parse-envelope
-                                 (soap-parse-server-response)
-                                 operation wsdl)
-                                cbargs)))
-                   ;; Ensure the url-retrieve buffer is not leaked.
-                   (and (buffer-live-p data-buffer)
-                        (kill-buffer data-buffer))))))
+  (let* ((port (soap-find-port wsdl service))
+         (operation (soap-find-operation port operation-name)))
+    (let ((url-request-method "POST")
+          (url-package-name "soap-client.el")
+          (url-package-version "1.0")
+          (url-request-data
+           ;; url-request-data expects a unibyte string already encoded...
+           (encode-coding-string
+            (soap-create-envelope operation parameters wsdl
+                                  (soap-port-service-url port))
+            'utf-8))
+          (url-mime-charset-string "utf-8;q=1, iso-8859-1;q=0.5")
+          (url-http-attempt-keepalives t)
+          (url-request-extra-headers
+           (list
+            (cons "SOAPAction"
+                  (concat "\"" (soap-bound-operation-soap-action
+                                operation) "\""))
+            (cons "Content-Type"
+                  "text/xml; charset=utf-8"))))
+      (if callback
+          (url-retrieve
+           (soap-port-service-url port)
+           (lambda (status)
+             (let ((data-buffer (current-buffer)))
+               (unwind-protect
+                    (let ((error-status (plist-get status :error)))
+                      (if error-status
+                          (signal (car error-status) (cdr error-status))
+                          (apply callback
+                                 (soap-parse-envelope
+                                  (soap-parse-server-response)
+                                  operation wsdl)
+                                 cbargs)))
+                 ;; Ensure the url-retrieve buffer is not leaked.
+                 (and (buffer-live-p data-buffer)
+                      (kill-buffer data-buffer))))))
           (let ((buffer (url-retrieve-synchronously
                          (soap-port-service-url port))))
             (condition-case err
@@ -3067,7 +3081,7 @@ OPERATION-NAME and PARAMETERS are as described in `soap-invoke'."
               (error
                (when soap-debug
                  (pop-to-buffer buffer))
-               (error (error-message-string err))))))))))
+               (error (error-message-string err)))))))))
 
 (defun soap-invoke (wsdl service operation-name &rest parameters)
   "Invoke a SOAP operation and return the result.
