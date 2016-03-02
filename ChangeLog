@@ -1,3 +1,16 @@
+2016-03-02  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
+	Import changes from Emacs master branch
+	* soap-client.el: Update copyright years.
+	(soap-warning): Fix docstring quoting.
+	(soap-decode-date-time): Likewise.
+	(soap-encode-xs-basic-type): Use encode-coding-string for base64
+	encoding.
+	(soap-decode-xs-basic-type): Use decode-coding-string for base64
+	decoding.
+	(soap-validate-xs-simple-type): Remove tabs for indentation.
+	* soap-inspect.el: Update copyright years.
+
 2016-02-29  Alex Harsanyi  <AlexHarsanyi@gmail.com>
 
 	* soap-client.el (soap-find-port, soap-find-operation)
