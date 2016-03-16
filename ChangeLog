@@ -1,5 +1,9 @@
 2016-03-16  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
 
+	* soap-client.el: Bump version to 3.1.1.
+
+2016-03-16  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
 	* soap-client.el (soap-encode-xs-complex-type): Fix error message.
 	(soap-find-port): Delete trailing whitespace.
 	(soap-find-operation): Fix documentation and rename parameter.
