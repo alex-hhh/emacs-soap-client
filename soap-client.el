@@ -1630,7 +1630,7 @@ This is a specialization of `soap-encode-value' for
 `soap-xs-complex-type' objects."
   (case (soap-xs-complex-type-indicator type)
     (array
-     (error "soap-encode-xs-complex-type arrays are handled elsewhere"))
+     (error "Arrays of type soap-encode-xs-complex-type are handled elsewhere"))
     ((sequence choice all nil)
      (let ((type-list (list type)))
 
@@ -3001,26 +3001,28 @@ http://schemas.xmlsoap.org/soap/encoding/\"\n"))
 
 (defun soap-find-port (wsdl service)
   "Return the WSDL port having SERVICE name.
-Signal an error if not found"
+Signal an error if not found."
   (or (catch 'found
         (dolist (p (soap-wsdl-ports wsdl))
           (when (equal service (soap-element-name p))
             (throw 'found p))))
-      (error "Unknown SOAP service: %s" service))) 
+      (error "Unknown SOAP service: %s" service)))
 
-(defun soap-find-operation (port opname)
-  "Find an operation inside PORT, a `soap-port-type'.
-Signal an error if not found"
+(defun soap-find-operation (port operation-name)
+  "Inside PORT, find OPERATION-NAME, a `soap-port-type'.
+Signal an error if not found."
   (let* ((binding (soap-port-binding port))
-         (op (gethash opname (soap-binding-operations binding))))
+         (op (gethash operation-name (soap-binding-operations binding))))
     (or op
         (error "No operation %s for SOAP service %s"
-               opname (soap-element-name port)))))
+               operation-name (soap-element-name port)))))
 
-(defun soap-operation-arity (wsdl service opname)
-  "Return the number of arguments required by a soap operation."
+(defun soap-operation-arity (wsdl service operation-name)
+  "Return the number of arguments required by a soap operation.
+WSDL, SERVICE, OPERATION-NAME and PARAMETERS are as described in
+`soap-invoke'."
   (let* ((port (soap-find-port wsdl service))
-         (op (soap-find-operation port opname))
+         (op (soap-find-operation port operation-name))
          (bop (soap-bound-operation-operation op)))
     (length (soap-operation-parameter-order bop))))
 
