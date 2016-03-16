@@ -1,13 +1,13 @@
+2016-03-16  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
+	* soap-client.el: Bump version to 3.1.0.
+
 2016-03-02  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
 
 	Import changes from Emacs master branch
 	* soap-client.el: Update copyright years.
 	(soap-warning): Fix docstring quoting.
 	(soap-decode-date-time): Likewise.
-	(soap-encode-xs-basic-type): Use encode-coding-string for base64
-	encoding.
-	(soap-decode-xs-basic-type): Use decode-coding-string for base64
-	decoding.
 	(soap-validate-xs-simple-type): Remove tabs for indentation.
 	* soap-inspect.el: Update copyright years.
 
