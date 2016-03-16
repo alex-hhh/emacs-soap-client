@@ -1,5 +1,10 @@
 2016-03-16  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
 
+	* soap-inspect.el (soap-inspect-xs-attribute): Fix checkdoc error.
+	(soap-inspect-xs-attribute-group): Likewise.
+
+2016-03-16  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
 	* soap-client.el: Bump version to 3.1.1.
 
 2016-03-16  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
