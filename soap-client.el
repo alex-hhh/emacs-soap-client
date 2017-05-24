@@ -43,7 +43,6 @@
 
 ;;; Code:
 
-(eval-when-compile (require 'cl))
 (require 'cl-lib)
 
 (require 'xml)
@@ -264,11 +263,11 @@ namespace tag."
     (dolist (c (xml-node-children node))
       (when (and (consp c)
                  (soap-with-local-xmlns c
-                   ;; We use `ignore-errors' here because we want to silently
-                   ;; skip nodes when we cannot convert them to a well-known
-                   ;; name.
-                   (eq (ignore-errors (soap-l2wk (xml-node-name c)))
-                       child-name)))
+		   ;; We use `ignore-errors' here because we want to silently
+		   ;; skip nodes when we cannot convert them to a well-known
+		   ;; name.
+		   (eq (ignore-errors (soap-l2wk (xml-node-name c)))
+		       child-name)))
         (push c result)))
     (nreverse result)))
 
@@ -287,10 +286,10 @@ be tagged with a namespace tag."
   (catch 'found
     (soap-with-local-xmlns node
       (dolist (a (xml-node-attributes node))
-        ;; We use `ignore-errors' here because we want to silently skip
-        ;; attributes for which we cannot convert them to a well-known name.
-        (when (eq (ignore-errors (soap-l2wk (car a))) attribute)
-          (throw 'found (cdr a)))))))
+	;; We use `ignore-errors' here because we want to silently skip
+	;; attributes for which we cannot convert them to a well-known name.
+	(when (eq (ignore-errors (soap-l2wk (car a))) attribute)
+	  (throw 'found (cdr a)))))))
 
 
 ;;;; XML namespaces
@@ -298,7 +297,7 @@ be tagged with a namespace tag."
 ;; An element in an XML namespace, "things" stored in soap-xml-namespaces will
 ;; be derived from this object.
 
-(defstruct soap-element
+(cl-defstruct soap-element
   name
   ;; The "well-known" namespace tag for the element.  For example, while
   ;; parsing XML documents, we can have different tags for the XMLSchema
@@ -321,13 +320,13 @@ element name."
 ;; a namespace link stores an alias for an object in once namespace to a
 ;; "target" object possibly in a different namespace
 
-(defstruct (soap-namespace-link (:include soap-element))
+(cl-defstruct (soap-namespace-link (:include soap-element))
   target)
 
 ;; A namespace is a collection of soap-element objects under a name (the name
 ;; of the namespace).
 
-(defstruct soap-namespace
+(cl-defstruct soap-namespace
   (name nil :read-only t)               ; e.g "http://xml.apache.org/xml-soap"
   (elements (make-hash-table :test 'equal) :read-only t))
 
@@ -360,9 +359,9 @@ added to the namespace."
                   (setq name target))))))
 
   ;; by now, name should be valid
-  (assert (and name (not (equal name "")))
-          nil
-          "Cannot determine name for namespace link")
+  (cl-assert (and name (not (equal name "")))
+	     nil
+	     "Cannot determine name for namespace link")
   (push (make-soap-namespace-link :name name :target target)
         (gethash name (soap-namespace-elements ns))))
 
@@ -372,7 +371,7 @@ If multiple elements with the same name exist,
 DISCRIMINANT-PREDICATE is used to pick one of them.  This allows
 storing elements of different types (like a message type and a
 binding) but the same name."
-  (assert (stringp name))
+  (cl-assert (stringp name))
   (let ((elements (gethash name (soap-namespace-elements ns))))
     (cond (discriminant-predicate
            (catch 'found
@@ -394,14 +393,14 @@ binding) but the same name."
 ;; message exchange.  We include here an XML schema model with a parser and
 ;; serializer/deserializer.
 
-(defstruct (soap-xs-type (:include soap-element))
+(cl-defstruct (soap-xs-type (:include soap-element))
   id
   attributes
   attribute-groups)
 
 ;;;;; soap-xs-basic-type
 
-(defstruct (soap-xs-basic-type (:include soap-xs-type))
+(cl-defstruct (soap-xs-basic-type (:include soap-xs-type))
   ;; Basic types are "built in" and we know how to handle them directly.
   ;; Other type definitions reference basic types, so we need to create them
   ;; in a namespace (see `soap-make-xs-basic-types')
@@ -483,66 +482,66 @@ This is a specialization of `soap-encode-value' for
 
     (when (or value (eq kind 'boolean))
       (let ((value-string
-             (case kind
-               ((string anyURI QName ID IDREF language)
-                (unless (stringp value)
-                  (error "Not a string value: %s" value))
-                (url-insert-entities-in-string value))
-               ((dateTime time date gYearMonth gYear gMonthDay gDay gMonth)
-                (cond ((consp value)
-                       ;; Value is a (current-time) style value,
-                       ;; convert to the ISO 8601-inspired XSD
-                       ;; string format in UTC.
-                       (format-time-string
-                        (concat
-                         (ecase kind
-                           (dateTime "%Y-%m-%dT%H:%M:%S")
-                           (time "%H:%M:%S")
-                           (date "%Y-%m-%d")
-                           (gYearMonth "%Y-%m")
-                           (gYear "%Y")
-                           (gMonthDay "--%m-%d")
-                           (gDay "---%d")
-                           (gMonth "--%m"))
-                         ;; Internal time is always in UTC.
-                         "Z")
-                        value t))
-                      ((stringp value)
-                       ;; Value is a string in the ISO 8601-inspired XSD
-                       ;; format.  Validate it.
-                       (soap-decode-date-time value kind)
-                       (url-insert-entities-in-string value))
-                      (t
-                       (error "Invalid date-time format"))))
-               (boolean
-                (unless (memq value '(t nil))
-                  (error "Not a boolean value"))
-                (if value "true" "false"))
+             (cl-case kind
+	       ((string anyURI QName ID IDREF language)
+		(unless (stringp value)
+		  (error "Not a string value: %s" value))
+		(url-insert-entities-in-string value))
+	       ((dateTime time date gYearMonth gYear gMonthDay gDay gMonth)
+		(cond ((consp value)
+		       ;; Value is a (current-time) style value,
+		       ;; convert to the ISO 8601-inspired XSD
+		       ;; string format in UTC.
+		       (format-time-string
+			(concat
+			 (cl-ecase kind
+			   (dateTime "%Y-%m-%dT%H:%M:%S")
+			   (time "%H:%M:%S")
+			   (date "%Y-%m-%d")
+			   (gYearMonth "%Y-%m")
+			   (gYear "%Y")
+			   (gMonthDay "--%m-%d")
+			   (gDay "---%d")
+			   (gMonth "--%m"))
+			 ;; Internal time is always in UTC.
+			 "Z")
+			value t))
+		      ((stringp value)
+		       ;; Value is a string in the ISO 8601-inspired XSD
+		       ;; format.  Validate it.
+		       (soap-decode-date-time value kind)
+		       (url-insert-entities-in-string value))
+		      (t
+		       (error "Invalid date-time format"))))
+	       (boolean
+		(unless (memq value '(t nil))
+		  (error "Not a boolean value"))
+		(if value "true" "false"))
 
-               ((long short int integer byte unsignedInt unsignedLong
-                      unsignedShort nonNegativeInteger decimal duration)
-                (unless (integerp value)
-                  (error "Not an integer value"))
-                (when (and (memq kind '(unsignedInt unsignedLong
-                                                    unsignedShort
-                                                    nonNegativeInteger))
-                           (< value 0))
-                  (error "Not a positive integer"))
-                (number-to-string value))
+	       ((long short int integer byte unsignedInt unsignedLong
+		      unsignedShort nonNegativeInteger decimal duration)
+		(unless (integerp value)
+		  (error "Not an integer value"))
+		(when (and (memq kind '(unsignedInt unsignedLong
+						    unsignedShort
+						    nonNegativeInteger))
+			   (< value 0))
+		  (error "Not a positive integer"))
+		(number-to-string value))
 
-               ((float double)
-                (unless (numberp value)
-                  (error "Not a number"))
-                (number-to-string value))
+	       ((float double)
+		(unless (numberp value)
+		  (error "Not a number"))
+		(number-to-string value))
 
-               (base64Binary
-                (unless (stringp value)
-                  (error "Not a string value for base64Binary"))
-                (base64-encode-string value))
+	       (base64Binary
+		(unless (stringp value)
+		  (error "Not a string value for base64Binary"))
+		(base64-encode-string value))
 
-               (otherwise
-                (error "Don't know how to encode %s for type %s"
-                       value (soap-element-fq-name type))))))
+	       (otherwise
+		(error "Don't know how to encode %s for type %s"
+		       value (soap-element-fq-name type))))))
         (soap-validate-xs-basic-type value-string type)
         (insert value-string)))))
 
@@ -673,18 +672,18 @@ This is a specialization of `soap-decode-type' for
 
     (if (null contents)
         nil
-      (ecase kind
-        ((string anyURI QName ID IDREF language) (car contents))
-        ((dateTime time date gYearMonth gYear gMonthDay gDay gMonth)
-         (car contents))
-        ((long short int integer
-               unsignedInt unsignedLong unsignedShort nonNegativeInteger
-               decimal byte float double duration)
-         (string-to-number (car contents)))
-        (boolean (string= (downcase (car contents)) "true"))
-        (base64Binary (base64-decode-string (car contents)))
-        (anyType (soap-decode-any-type node))
-        (Array (soap-decode-array node))))))
+      (cl-ecase kind
+	((string anyURI QName ID IDREF language) (car contents))
+	((dateTime time date gYearMonth gYear gMonthDay gDay gMonth)
+	 (car contents))
+	((long short int integer
+	       unsignedInt unsignedLong unsignedShort nonNegativeInteger
+	       decimal byte float double duration)
+	 (string-to-number (car contents)))
+	(boolean (string= (downcase (car contents)) "true"))
+	(base64Binary (base64-decode-string (car contents)))
+	(anyType (soap-decode-any-type node))
+	(Array (soap-decode-array node))))))
 
 ;; Register methods for `soap-xs-basic-type'
 (let ((tag (aref (make-soap-xs-basic-type) 0)))
@@ -694,7 +693,7 @@ This is a specialization of `soap-decode-type' for
 
 ;;;;; soap-xs-element
 
-(defstruct (soap-xs-element (:include soap-element))
+(cl-defstruct (soap-xs-element (:include soap-element))
   ;; NOTE: we don't support exact number of occurrences via minOccurs,
   ;; maxOccurs.  Instead we support optional? and multiple?
 
@@ -738,8 +737,8 @@ contains a reference, retrieve the type of the reference."
         (ref (xml-get-attribute-or-nil node 'ref))
         (substitution-group (xml-get-attribute-or-nil node 'substitutionGroup))
         (node-name (soap-l2wk (xml-node-name node))))
-    (assert (memq node-name '(xsd:element xsd:group))
-            "expecting xsd:element or xsd:group, got %s" node-name)
+    (cl-assert (memq node-name '(xsd:element xsd:group))
+	       "expecting xsd:element or xsd:group, got %s" node-name)
 
     (when type
       (setq type (soap-l2fq type 'tns)))
@@ -895,11 +894,11 @@ This is a specialization of `soap-encode-value' for
                                             (soap-element-namespace-tag type)))
                              (setf (soap-xs-element-type^ new-element)
                                    (soap-xs-complex-type-base type))
-                             (loop for i below (length value)
-                                do (progn
-                                     (soap-encode-xs-element (aref value i) new-element)
-                                     )))
-                           (soap-encode-value value type))
+                             (cl-loop for i below (length value)
+				      do (progn
+					   (soap-encode-xs-element (aref value i) new-element)
+					   )))
+			 (soap-encode-value value type))
                        (insert "</" fq-name ">\n"))
               ;; else
               (insert "/>\n"))))
@@ -925,18 +924,18 @@ This is a specialization of `soap-decode-type' for
 
 ;;;;; soap-xs-attribute
 
-(defstruct (soap-xs-attribute (:include soap-element))
+(cl-defstruct (soap-xs-attribute (:include soap-element))
   type                                  ; a simple type or basic type
   default                               ; the default value, if any
   reference)
 
-(defstruct (soap-xs-attribute-group (:include soap-xs-type))
+(cl-defstruct (soap-xs-attribute-group (:include soap-xs-type))
   reference)
 
 (defun soap-xs-parse-attribute (node)
   "Construct a `soap-xs-attribute' from NODE."
-  (assert (eq (soap-l2wk (xml-node-name node)) 'xsd:attribute)
-          "expecting xsd:attribute, got %s" (soap-l2wk (xml-node-name node)))
+  (cl-assert (eq (soap-l2wk (xml-node-name node)) 'xsd:attribute)
+	     "expecting xsd:attribute, got %s" (soap-l2wk (xml-node-name node)))
   (let* ((name (xml-get-attribute-or-nil node 'name))
          (type (soap-l2fq (xml-get-attribute-or-nil node 'type)))
          (default (xml-get-attribute-or-nil node 'fixed))
@@ -952,8 +951,8 @@ This is a specialization of `soap-decode-type' for
 (defun soap-xs-parse-attribute-group (node)
   "Construct a `soap-xs-attribute-group' from NODE."
   (let ((node-name (soap-l2wk (xml-node-name node))))
-    (assert (eq node-name 'xsd:attributeGroup)
-            "expecting xsd:attributeGroup, got %s" node-name)
+    (cl-assert (eq node-name 'xsd:attributeGroup)
+	       "expecting xsd:attributeGroup, got %s" node-name)
     (let ((name (xml-get-attribute-or-nil node 'name))
           (id (xml-get-attribute-or-nil node 'id))
           (ref (xml-get-attribute-or-nil node 'ref))
@@ -970,14 +969,14 @@ This is a specialization of `soap-decode-type' for
           (unless (stringp child)
             ;; Ignore optional annotation.
             ;; Ignore anyAttribute nodes.
-            (case (soap-l2wk (xml-node-name child))
-              (xsd:attribute
-               (push (soap-xs-parse-attribute child)
-                     (soap-xs-type-attributes attribute-group)))
-              (xsd:attributeGroup
-               (push (soap-xs-parse-attribute-group child)
-                     (soap-xs-attribute-group-attribute-groups
-                      attribute-group)))))))
+            (cl-case (soap-l2wk (xml-node-name child))
+	      (xsd:attribute
+	       (push (soap-xs-parse-attribute child)
+		     (soap-xs-type-attributes attribute-group)))
+	      (xsd:attributeGroup
+	       (push (soap-xs-parse-attribute-group child)
+		     (soap-xs-attribute-group-attribute-groups
+		      attribute-group)))))))
       attribute-group)))
 
 (defun soap-resolve-references-for-xs-attribute (attribute wsdl)
@@ -1043,7 +1042,7 @@ See also `soap-wsdl-resolve-references'."
 
 ;;;;; soap-xs-simple-type
 
-(defstruct (soap-xs-simple-type (:include soap-xs-type))
+(cl-defstruct (soap-xs-simple-type (:include soap-xs-type))
   ;; A simple type is an extension on the basic type to which some
   ;; restrictions can be added.  For example we can define a simple type based
   ;; off "string" with the restrictions that only the strings "one", "two" and
@@ -1064,11 +1063,11 @@ See also `soap-wsdl-resolve-references'."
 
 (defun soap-xs-parse-simple-type (node)
   "Construct an `soap-xs-simple-type' object from the XML NODE."
-  (assert (memq (soap-l2wk (xml-node-name node))
-                '(xsd:simpleType xsd:simpleContent))
-          nil
-          "expecting xsd:simpleType or xsd:simpleContent node, got %s"
-          (soap-l2wk (xml-node-name node)))
+  (cl-assert (memq (soap-l2wk (xml-node-name node))
+		   '(xsd:simpleType xsd:simpleContent))
+	     nil
+	     "expecting xsd:simpleType or xsd:simpleContent node, got %s"
+	     (soap-l2wk (xml-node-name node)))
 
   ;; NOTE: name can be nil for inline types.  Such types cannot be added to a
   ;; namespace.
@@ -1079,21 +1078,21 @@ See also `soap-wsdl-resolve-references'."
                  :name name :namespace-tag soap-target-xmlns :id id))
           (def (soap-xml-node-find-matching-child
                 node '(xsd:restriction xsd:extension xsd:union xsd:list))))
-      (ecase (soap-l2wk (xml-node-name def))
-        (xsd:restriction (soap-xs-add-restriction def type))
-        (xsd:extension (soap-xs-add-extension def type))
-        (xsd:union (soap-xs-add-union def type))
-        (xsd:list (soap-xs-add-list def type)))
+      (cl-ecase (soap-l2wk (xml-node-name def))
+	(xsd:restriction (soap-xs-add-restriction def type))
+	(xsd:extension (soap-xs-add-extension def type))
+	(xsd:union (soap-xs-add-union def type))
+	(xsd:list (soap-xs-add-list def type)))
 
       type)))
 
 (defun soap-xs-add-restriction (node type)
   "Add restrictions defined in XML NODE to TYPE, an `soap-xs-simple-type'."
 
-  (assert (eq (soap-l2wk (xml-node-name node)) 'xsd:restriction)
-          nil
-          "expecting xsd:restriction node, got %s"
-          (soap-l2wk (xml-node-name node)))
+  (cl-assert (eq (soap-l2wk (xml-node-name node)) 'xsd:restriction)
+	     nil
+	     "expecting xsd:restriction node, got %s"
+	     (soap-l2wk (xml-node-name node)))
 
   (setf (soap-xs-simple-type-base type)
         (soap-l2fq (xml-get-attribute node 'base)))
@@ -1101,70 +1100,70 @@ See also `soap-wsdl-resolve-references'."
   (dolist (r (xml-node-children node))
     (unless (stringp r)                 ; skip the white space
       (let ((value (xml-get-attribute r 'value)))
-        (case (soap-l2wk (xml-node-name r))
-          (xsd:enumeration
-           (push value (soap-xs-simple-type-enumeration type)))
-          (xsd:pattern
-           (setf (soap-xs-simple-type-pattern type)
-                 (concat "\\`" (xsdre-translate value) "\\'")))
-          (xsd:length
-           (let ((value (string-to-number value)))
-             (setf (soap-xs-simple-type-length-range type)
-                   (cons value value))))
-          (xsd:minLength
-           (let ((value (string-to-number value)))
-             (setf (soap-xs-simple-type-length-range type)
-                   (if (soap-xs-simple-type-length-range type)
-                       (cons value
-                             (cdr (soap-xs-simple-type-length-range type)))
-                     ;; else
-                     (cons value nil)))))
-          (xsd:maxLength
-           (let ((value (string-to-number value)))
-             (setf (soap-xs-simple-type-length-range type)
-                   (if (soap-xs-simple-type-length-range type)
-                       (cons (car (soap-xs-simple-type-length-range type))
-                             value)
-                     ;; else
-                     (cons nil value)))))
-          (xsd:minExclusive
-           (let ((value (string-to-number value)))
-             (setf (soap-xs-simple-type-integer-range type)
-                   (if (soap-xs-simple-type-integer-range type)
-                       (cons (1+ value)
-                             (cdr (soap-xs-simple-type-integer-range type)))
-                     ;; else
-                     (cons (1+ value) nil)))))
-          (xsd:maxExclusive
-           (let ((value (string-to-number value)))
-             (setf (soap-xs-simple-type-integer-range type)
-                   (if (soap-xs-simple-type-integer-range type)
-                       (cons (car (soap-xs-simple-type-integer-range type))
-                             (1- value))
-                     ;; else
-                     (cons nil (1- value))))))
-          (xsd:minInclusive
-           (let ((value (string-to-number value)))
-             (setf (soap-xs-simple-type-integer-range type)
-                   (if (soap-xs-simple-type-integer-range type)
-                       (cons value
-                             (cdr (soap-xs-simple-type-integer-range type)))
-                     ;; else
-                     (cons value nil)))))
-          (xsd:maxInclusive
-           (let ((value (string-to-number value)))
-             (setf (soap-xs-simple-type-integer-range type)
-                   (if (soap-xs-simple-type-integer-range type)
-                       (cons (car (soap-xs-simple-type-integer-range type))
-                             value)
-                     ;; else
-                     (cons nil value))))))))))
+        (cl-case (soap-l2wk (xml-node-name r))
+	  (xsd:enumeration
+	   (push value (soap-xs-simple-type-enumeration type)))
+	  (xsd:pattern
+	   (setf (soap-xs-simple-type-pattern type)
+		 (concat "\\`" (xsdre-translate value) "\\'")))
+	  (xsd:length
+	   (let ((value (string-to-number value)))
+	     (setf (soap-xs-simple-type-length-range type)
+		   (cons value value))))
+	  (xsd:minLength
+	   (let ((value (string-to-number value)))
+	     (setf (soap-xs-simple-type-length-range type)
+		   (if (soap-xs-simple-type-length-range type)
+		       (cons value
+			     (cdr (soap-xs-simple-type-length-range type)))
+		     ;; else
+		     (cons value nil)))))
+	  (xsd:maxLength
+	   (let ((value (string-to-number value)))
+	     (setf (soap-xs-simple-type-length-range type)
+		   (if (soap-xs-simple-type-length-range type)
+		       (cons (car (soap-xs-simple-type-length-range type))
+			     value)
+		     ;; else
+		     (cons nil value)))))
+	  (xsd:minExclusive
+	   (let ((value (string-to-number value)))
+	     (setf (soap-xs-simple-type-integer-range type)
+		   (if (soap-xs-simple-type-integer-range type)
+		       (cons (1+ value)
+			     (cdr (soap-xs-simple-type-integer-range type)))
+		     ;; else
+		     (cons (1+ value) nil)))))
+	  (xsd:maxExclusive
+	   (let ((value (string-to-number value)))
+	     (setf (soap-xs-simple-type-integer-range type)
+		   (if (soap-xs-simple-type-integer-range type)
+		       (cons (car (soap-xs-simple-type-integer-range type))
+			     (1- value))
+		     ;; else
+		     (cons nil (1- value))))))
+	  (xsd:minInclusive
+	   (let ((value (string-to-number value)))
+	     (setf (soap-xs-simple-type-integer-range type)
+		   (if (soap-xs-simple-type-integer-range type)
+		       (cons value
+			     (cdr (soap-xs-simple-type-integer-range type)))
+		     ;; else
+		     (cons value nil)))))
+	  (xsd:maxInclusive
+	   (let ((value (string-to-number value)))
+	     (setf (soap-xs-simple-type-integer-range type)
+		   (if (soap-xs-simple-type-integer-range type)
+		       (cons (car (soap-xs-simple-type-integer-range type))
+			     value)
+		     ;; else
+		     (cons nil value))))))))))
 
 (defun soap-xs-add-union (node type)
   "Add union members defined in XML NODE to TYPE, an `soap-xs-simple-type'."
-  (assert (eq (soap-l2wk (xml-node-name node)) 'xsd:union)
-          nil
-          "expecting xsd:union node, got %s" (soap-l2wk (xml-node-name node)))
+  (cl-assert (eq (soap-l2wk (xml-node-name node)) 'xsd:union)
+	     nil
+	     "expecting xsd:union node, got %s" (soap-l2wk (xml-node-name node)))
 
   (setf (soap-xs-simple-type-base type)
         (mapcar 'soap-l2fq
@@ -1182,9 +1181,9 @@ See also `soap-wsdl-resolve-references'."
 
 (defun soap-xs-add-list (node type)
   "Add list defined in XML NODE to TYPE, a `soap-xs-simple-type'."
-  (assert (eq (soap-l2wk (xml-node-name node)) 'xsd:list)
-          nil
-          "expecting xsd:list node, got %s" (soap-l2wk (xml-node-name node)))
+  (cl-assert (eq (soap-l2wk (xml-node-name node)) 'xsd:list)
+	     nil
+	     "expecting xsd:list node, got %s" (soap-l2wk (xml-node-name node)))
 
   ;; A simple type can be defined inline inside the list node or referenced by
   ;; the itemType attribute, in which case it will be resolved by the
@@ -1219,16 +1218,16 @@ See also `soap-wsdl-resolve-references'."
 (defun soap-validate-xs-basic-type (value type)
   "Validate VALUE against the basic type TYPE."
   (let* ((kind (soap-xs-basic-type-kind type)))
-    (case kind
+    (cl-case kind
       ((anyType Array byte[])
        value)
       (t
        (let ((convert (get kind 'rng-xsd-convert)))
-         (if convert
-             (if (rng-dt-make-value convert value)
-                 value
-               (error "Invalid %s: %s" (symbol-name kind) value))
-           (error "Don't know how to convert %s" kind)))))))
+	 (if convert
+	     (if (rng-dt-make-value convert value)
+		 value
+	       (error "Invalid %s: %s" (symbol-name kind) value))
+	   (error "Don't know how to convert %s" kind)))))))
 
 (defun soap-validate-xs-simple-type (value type)
   "Validate VALUE against the restrictions of TYPE."
@@ -1384,7 +1383,7 @@ This is a specialization of `soap-decode-type' for
 
 ;;;;; soap-xs-complex-type
 
-(defstruct (soap-xs-complex-type (:include soap-xs-type))
+(cl-defstruct (soap-xs-complex-type (:include soap-xs-type))
   indicator                             ; sequence, choice, all, array
   base
   elements
@@ -1400,33 +1399,33 @@ This is a specialization of `soap-decode-type' for
         type
         attributes
         attribute-groups)
-    (assert (memq node-name '(xsd:complexType xsd:complexContent xsd:group))
-            nil "unexpected node: %s" node-name)
+    (cl-assert (memq node-name '(xsd:complexType xsd:complexContent xsd:group))
+	       nil "unexpected node: %s" node-name)
 
     (dolist (def (xml-node-children node))
       (when (consp def)                 ; skip text nodes
-        (case (soap-l2wk (xml-node-name def))
-          (xsd:attribute (push (soap-xs-parse-attribute def) attributes))
-          (xsd:attributeGroup
-           (push (soap-xs-parse-attribute-group def)
-                 attribute-groups))
-          (xsd:simpleContent (setq type (soap-xs-parse-simple-type def)))
-          ((xsd:sequence xsd:all xsd:choice)
-           (setq type (soap-xs-parse-sequence def)))
-          (xsd:complexContent
-           (dolist (def (xml-node-children def))
-             (when (consp def)
-               (case (soap-l2wk (xml-node-name def))
-                 (xsd:attribute
-                  (push (soap-xs-parse-attribute def) attributes))
-                 (xsd:attributeGroup
-                  (push (soap-xs-parse-attribute-group def)
-                        attribute-groups))
-                 ((xsd:extension xsd:restriction)
-                  (setq type
-                        (soap-xs-parse-extension-or-restriction def)))
-                 ((xsd:sequence xsd:all xsd:choice)
-                  (soap-xs-parse-sequence def)))))))))
+        (cl-case (soap-l2wk (xml-node-name def))
+	  (xsd:attribute (push (soap-xs-parse-attribute def) attributes))
+	  (xsd:attributeGroup
+	   (push (soap-xs-parse-attribute-group def)
+		 attribute-groups))
+	  (xsd:simpleContent (setq type (soap-xs-parse-simple-type def)))
+	  ((xsd:sequence xsd:all xsd:choice)
+	   (setq type (soap-xs-parse-sequence def)))
+	  (xsd:complexContent
+	   (dolist (def (xml-node-children def))
+	     (when (consp def)
+	       (cl-case (soap-l2wk (xml-node-name def))
+		 (xsd:attribute
+		  (push (soap-xs-parse-attribute def) attributes))
+		 (xsd:attributeGroup
+		  (push (soap-xs-parse-attribute-group def)
+			attribute-groups))
+		 ((xsd:extension xsd:restriction)
+		  (setq type
+			(soap-xs-parse-extension-or-restriction def)))
+		 ((xsd:sequence xsd:all xsd:choice)
+		  (soap-xs-parse-sequence def)))))))))
     (unless type
       ;; the type has not been built, this is a shortcut for a simpleContent
       ;; node
@@ -1447,39 +1446,39 @@ This is a specialization of `soap-decode-type' for
 (defun soap-xs-parse-sequence (node)
   "Parse a sequence definition from XML NODE.
 Returns a `soap-xs-complex-type'"
-  (assert (memq (soap-l2wk (xml-node-name node))
-                '(xsd:sequence xsd:choice xsd:all))
-          nil
-          "unexpected node: %s" (soap-l2wk (xml-node-name node)))
+  (cl-assert (memq (soap-l2wk (xml-node-name node))
+		   '(xsd:sequence xsd:choice xsd:all))
+	     nil
+	     "unexpected node: %s" (soap-l2wk (xml-node-name node)))
 
   (let ((type (make-soap-xs-complex-type)))
 
     (setf (soap-xs-complex-type-indicator type)
-          (ecase (soap-l2wk (xml-node-name node))
-            (xsd:sequence 'sequence)
-            (xsd:all 'all)
-            (xsd:choice 'choice)))
+          (cl-ecase (soap-l2wk (xml-node-name node))
+	    (xsd:sequence 'sequence)
+	    (xsd:all 'all)
+	    (xsd:choice 'choice)))
 
     (setf (soap-xs-complex-type-optional? type) (soap-node-optional node))
     (setf (soap-xs-complex-type-multiple? type) (soap-node-multiple node))
 
     (dolist (r (xml-node-children node))
       (unless (stringp r)                 ; skip the white space
-        (case (soap-l2wk (xml-node-name r))
-          ((xsd:element xsd:group)
-           (push (soap-xs-parse-element r)
-                 (soap-xs-complex-type-elements type)))
-          ((xsd:sequence xsd:choice xsd:all)
-           ;; an inline sequence, choice or all node
-           (let ((choice (soap-xs-parse-sequence r)))
-             (push (make-soap-xs-element :name nil :type^ choice)
-                   (soap-xs-complex-type-elements type))))
-          (xsd:attribute
-           (push (soap-xs-parse-attribute r)
-                 (soap-xs-type-attributes type)))
-          (xsd:attributeGroup
-           (push (soap-xs-parse-attribute-group r)
-                 (soap-xs-type-attribute-groups type))))))
+        (cl-case (soap-l2wk (xml-node-name r))
+	  ((xsd:element xsd:group)
+	   (push (soap-xs-parse-element r)
+		 (soap-xs-complex-type-elements type)))
+	  ((xsd:sequence xsd:choice xsd:all)
+	   ;; an inline sequence, choice or all node
+	   (let ((choice (soap-xs-parse-sequence r)))
+	     (push (make-soap-xs-element :name nil :type^ choice)
+		   (soap-xs-complex-type-elements type))))
+	  (xsd:attribute
+	   (push (soap-xs-parse-attribute r)
+		 (soap-xs-type-attributes type)))
+	  (xsd:attributeGroup
+	   (push (soap-xs-parse-attribute-group r)
+		 (soap-xs-type-attribute-groups type))))))
 
     (setf (soap-xs-complex-type-elements type)
           (nreverse (soap-xs-complex-type-elements type)))
@@ -1489,10 +1488,10 @@ Returns a `soap-xs-complex-type'"
 (defun soap-xs-parse-extension-or-restriction (node)
   "Parse an extension or restriction definition from XML NODE.
 Return a `soap-xs-complex-type'."
-  (assert (memq (soap-l2wk (xml-node-name node))
-                '(xsd:extension xsd:restriction))
-          nil
-          "unexpected node: %s" (soap-l2wk (xml-node-name node)))
+  (cl-assert (memq (soap-l2wk (xml-node-name node))
+		   '(xsd:extension xsd:restriction))
+	     nil
+	     "unexpected node: %s" (soap-l2wk (xml-node-name node)))
   (let (type
         attributes
         attribute-groups
@@ -1507,21 +1506,21 @@ Return a `soap-xs-complex-type'."
 
     (dolist (def (xml-node-children node))
       (when (consp def)                 ; skip text nodes
-        (case (soap-l2wk (xml-node-name def))
-          ((xsd:sequence xsd:choice xsd:all)
-           (setq type (soap-xs-parse-sequence def)))
-          (xsd:attribute
-           (if array?
-               (let ((array-type
-                      (soap-xml-get-attribute-or-nil1 def 'wsdl:arrayType)))
-                 (when (and array-type
-                            (string-match "^\\(.*\\)\\[\\]$" array-type))
-                   ;; Override
-                   (setq base (match-string 1 array-type))))
-             ;; else
-             (push (soap-xs-parse-attribute def) attributes)))
-          (xsd:attributeGroup
-           (push (soap-xs-parse-attribute-group def) attribute-groups)))))
+        (cl-case (soap-l2wk (xml-node-name def))
+	  ((xsd:sequence xsd:choice xsd:all)
+	   (setq type (soap-xs-parse-sequence def)))
+	  (xsd:attribute
+	   (if array?
+	       (let ((array-type
+		      (soap-xml-get-attribute-or-nil1 def 'wsdl:arrayType)))
+		 (when (and array-type
+			    (string-match "^\\(.*\\)\\[\\]$" array-type))
+		   ;; Override
+		   (setq base (match-string 1 array-type))))
+	     ;; else
+	     (push (soap-xs-parse-attribute def) attributes)))
+	  (xsd:attributeGroup
+	   (push (soap-xs-parse-attribute-group def) attribute-groups)))))
 
     (unless type
       (setq type (make-soap-xs-complex-type))
@@ -1628,7 +1627,7 @@ position.
 
 This is a specialization of `soap-encode-value' for
 `soap-xs-complex-type' objects."
-  (case (soap-xs-complex-type-indicator type)
+  (cl-case (soap-xs-complex-type-indicator type)
     (array
      (error "Arrays of type soap-encode-xs-complex-type are handled elsewhere"))
     ((sequence choice all nil)
@@ -1636,67 +1635,67 @@ This is a specialization of `soap-encode-value' for
 
        ;; Collect all base types
        (let ((base (soap-xs-complex-type-base type)))
-         (while base
-           (push base type-list)
-           (setq base (soap-xs-complex-type-base base))))
+	 (while base
+	   (push base type-list)
+	   (setq base (soap-xs-complex-type-base base))))
 
        (dolist (type type-list)
-         (dolist (element (soap-xs-complex-type-elements type))
-           (catch 'done
-             (let ((instance-count 0))
-               (dolist (candidate (soap-get-candidate-elements element))
-                 (let ((e-name (soap-xs-element-name candidate)))
-                   (if e-name
-                       (let ((e-name (intern e-name)))
-                         (dolist (v value)
-                           (when (equal (car v) e-name)
-                             (incf instance-count)
-                             (soap-encode-value (cdr v) candidate))))
-                     (if (soap-xs-complex-type-indicator type)
-                         (let ((current-point (point)))
-                           ;; Check if encoding happened by checking if
-                           ;; characters were inserted in the buffer.
-                           (soap-encode-value value candidate)
-                           (when (not (equal current-point (point)))
-                             (incf instance-count)))
-                       (dolist (v value)
-                         (let ((current-point (point)))
-                           (soap-encode-value v candidate)
-                           (when (not (equal current-point (point)))
-                             (incf instance-count))))))))
-               ;; Do some sanity checking
-               (let* ((indicator (soap-xs-complex-type-indicator type))
-                      (element-type (soap-xs-element-type element))
-                      (reference (soap-xs-element-reference element))
-                      (e-name (or (soap-xs-element-name element)
-                                  (and reference
-                                       (soap-xs-element-name reference)))))
-                 (cond ((and (eq indicator 'choice)
-                             (> instance-count 0))
-                        ;; This was a choice node and we encoded
-                        ;; one instance.
-                        (throw 'done t))
-                       ((and (not (eq indicator 'choice))
-                             (= instance-count 0)
-                             (not (soap-xs-element-optional? element))
-                             (and (soap-xs-complex-type-p element-type)
-                                  (not (soap-xs-complex-type-optional-p
-                                        element-type))))
-                        (soap-warning
-                         "While encoding %s: missing non-nillable slot %s"
-                         value e-name))
-                       ((and (> instance-count 1)
-                             (not (soap-xs-element-multiple? element))
-                             (and (soap-xs-complex-type-p element-type)
-                                  (not (soap-xs-complex-type-multiple-p
-                                        element-type))))
-                        (soap-warning
-                         (concat  "While encoding %s: expected single,"
-                                  " found multiple elements for slot %s")
-                         value e-name))))))))))
+	 (dolist (element (soap-xs-complex-type-elements type))
+	   (catch 'done
+	     (let ((instance-count 0))
+	       (dolist (candidate (soap-get-candidate-elements element))
+		 (let ((e-name (soap-xs-element-name candidate)))
+		   (if e-name
+		       (let ((e-name (intern e-name)))
+			 (dolist (v value)
+			   (when (equal (car v) e-name)
+			     (cl-incf instance-count)
+			     (soap-encode-value (cdr v) candidate))))
+		     (if (soap-xs-complex-type-indicator type)
+			 (let ((current-point (point)))
+			   ;; Check if encoding happened by checking if
+			   ;; characters were inserted in the buffer.
+			   (soap-encode-value value candidate)
+			   (when (not (equal current-point (point)))
+			     (cl-incf instance-count)))
+		       (dolist (v value)
+			 (let ((current-point (point)))
+			   (soap-encode-value v candidate)
+			   (when (not (equal current-point (point)))
+			     (cl-incf instance-count))))))))
+	       ;; Do some sanity checking
+	       (let* ((indicator (soap-xs-complex-type-indicator type))
+		      (element-type (soap-xs-element-type element))
+		      (reference (soap-xs-element-reference element))
+		      (e-name (or (soap-xs-element-name element)
+				  (and reference
+				       (soap-xs-element-name reference)))))
+		 (cond ((and (eq indicator 'choice)
+			     (> instance-count 0))
+			;; This was a choice node and we encoded
+			;; one instance.
+			(throw 'done t))
+		       ((and (not (eq indicator 'choice))
+			     (= instance-count 0)
+			     (not (soap-xs-element-optional? element))
+			     (and (soap-xs-complex-type-p element-type)
+				  (not (soap-xs-complex-type-optional-p
+					element-type))))
+			(soap-warning
+			 "While encoding %s: missing non-nillable slot %s"
+			 value e-name))
+		       ((and (> instance-count 1)
+			     (not (soap-xs-element-multiple? element))
+			     (and (soap-xs-complex-type-p element-type)
+				  (not (soap-xs-complex-type-multiple-p
+					element-type))))
+			(soap-warning
+			 (concat  "While encoding %s: expected single,"
+				  " found multiple elements for slot %s")
+			 value e-name))))))))))
     (t
      (error "Don't know how to encode complex type: %s"
-            (soap-xs-complex-type-indicator type)))))
+	    (soap-xs-complex-type-indicator type)))))
 
 (defun soap-xml-get-children-fq (node child-name)
   "Return the children of NODE named CHILD-NAME.
@@ -1706,12 +1705,12 @@ namespace is used to resolve the children's namespace tags."
     (dolist (c (xml-node-children node))
       (when (and (consp c)
                  (soap-with-local-xmlns node
-                   ;; We use `ignore-errors' here because we want to silently
-                   ;; skip nodes for which we cannot convert them to a
-                   ;; well-known name.
-                   (equal (ignore-errors
-                            (soap-l2fq (xml-node-name c)))
-                          child-name)))
+		   ;; We use `ignore-errors' here because we want to silently
+		   ;; skip nodes for which we cannot convert them to a
+		   ;; well-known name.
+		   (equal (ignore-errors
+			    (soap-l2fq (xml-node-name c)))
+			  child-name)))
         (push c result)))
     (nreverse result)))
 
@@ -1801,131 +1800,131 @@ type-info stored in TYPE.
 
 This is a specialization of `soap-decode-type' for
 `soap-xs-basic-type' objects."
-  (case (soap-xs-complex-type-indicator type)
+  (cl-case (soap-xs-complex-type-indicator type)
     (array
      (let ((result nil)
-           (element-type (soap-xs-complex-type-base type)))
+	   (element-type (soap-xs-complex-type-base type)))
        (dolist (node (xml-node-children node))
-         (when (consp node)
-           (push (soap-decode-type element-type node) result)))
+	 (when (consp node)
+	   (push (soap-decode-type element-type node) result)))
        (nreverse result)))
     ((sequence choice all nil)
      (let ((result nil)
-           (base (soap-xs-complex-type-base type)))
+	   (base (soap-xs-complex-type-base type)))
        (when base
-         (setq result (nreverse (soap-decode-type base node))))
+	 (setq result (nreverse (soap-decode-type base node))))
        (catch 'done
-         (dolist (element (soap-xs-complex-type-elements type))
-           (let* ((instance-count 0)
-                  (e-name (soap-xs-element-name element))
-                  ;; Heuristic: guess if we need to decode using local
-                  ;; namespaces.
-                  (use-fq-names (string-match ":" (symbol-name (car node))))
-                  (children (if e-name
-                                (if use-fq-names
-                                    ;; Find relevant children
-                                    ;; using local namespaces by
-                                    ;; searching for the element's
-                                    ;; fully-qualified name.
-                                    (soap-xml-get-children-fq
-                                     node
-                                     (soap-xs-element-get-fq-name
-                                      element soap-current-wsdl))
-                                  ;; No local namespace resolution
-                                  ;; needed so use the element's
-                                  ;; name unqualified.
-                                  (xml-get-children node (intern e-name)))
-                              ;; e-name is nil so a) we don't know which
-                              ;; children to operate on, and b) we want to
-                              ;; re-use soap-decode-xs-complex-type, which
-                              ;; expects a node argument with a complex
-                              ;; type; therefore we need to operate on the
-                              ;; entire node.  We wrap node in a list so
-                              ;; that it will carry through as "node" in the
-                              ;; loop below.
-                              ;;
-                              ;; For example:
-                              ;;
-                              ;; Element Type:
-                              ;; <xs:complexType name="A">
-                              ;;  <xs:sequence>
-                              ;;   <xs:element name="B" type="t:BType"/>
-                              ;;   <xs:choice>
-                              ;;    <xs:element name="C" type="xs:string"/>
-                              ;;    <xs:element name="D" type="t:DType"/>
-                              ;;   </xs:choice>
-                              ;;  </xs:sequence>
-                              ;; </xs:complexType>
-                              ;;
-                              ;; Node:
-                              ;; <t:A>
-                              ;;   <t:B tag="b"/>
-                              ;;   <t:C>1</C>
-                              ;; </t:A>
-                              ;;
-                              ;; soap-decode-type will be called below with:
-                              ;;
-                              ;; element =
-                              ;;   <xs:choice>
-                              ;;     <xs:element name="C" type="xs:string"/>
-                              ;;     <xs:element name="D" type="t:DType"/>
-                              ;;   </xs:choice>
-                              ;; node =
-                              ;;   <t:A>
-                              ;;     <t:B tag="b"/>
-                              ;;     <t:C>1</C>
-                              ;;   </t:A>
-                              (list node)))
-                  (element-type (soap-xs-element-type element)))
-             (dolist (node children)
-               (incf instance-count)
-               (let* ((attributes
-                       (soap-decode-xs-attributes element-type node))
-                      ;; Attributes may specify xsi:type override.
-                      (element-type
-                       (if (soap-xml-get-attribute-or-nil1 node 'xsi:type)
-                           (soap-wsdl-get
-                            (soap-l2fq
-                             (soap-xml-get-attribute-or-nil1 node
-                                                             'xsi:type))
-                            soap-current-wsdl 'soap-xs-type-p t)
-                         element-type))
-                      (decoded-child (soap-decode-type element-type node)))
-                 (if e-name
-                     (push (cons (intern e-name)
-                                 (append attributes decoded-child)) result)
-                   ;; When e-name is nil we don't want to introduce an extra
-                   ;; level of nesting, so we splice the decoding into
-                   ;; result.
-                   (setq result (append decoded-child result)))))
-             (cond ((and (eq (soap-xs-complex-type-indicator type) 'choice)
-                         ;; Choices can allow multiple values.
-                         (not (soap-xs-complex-type-multiple-p type))
-                         (> instance-count 0))
-                    ;; This was a choice node, and we decoded one value.
-                    (throw 'done t))
+	 (dolist (element (soap-xs-complex-type-elements type))
+	   (let* ((instance-count 0)
+		  (e-name (soap-xs-element-name element))
+		  ;; Heuristic: guess if we need to decode using local
+		  ;; namespaces.
+		  (use-fq-names (string-match ":" (symbol-name (car node))))
+		  (children (if e-name
+				(if use-fq-names
+				    ;; Find relevant children
+				    ;; using local namespaces by
+				    ;; searching for the element's
+				    ;; fully-qualified name.
+				    (soap-xml-get-children-fq
+				     node
+				     (soap-xs-element-get-fq-name
+				      element soap-current-wsdl))
+				  ;; No local namespace resolution
+				  ;; needed so use the element's
+				  ;; name unqualified.
+				  (xml-get-children node (intern e-name)))
+			      ;; e-name is nil so a) we don't know which
+			      ;; children to operate on, and b) we want to
+			      ;; re-use soap-decode-xs-complex-type, which
+			      ;; expects a node argument with a complex
+			      ;; type; therefore we need to operate on the
+			      ;; entire node.  We wrap node in a list so
+			      ;; that it will carry through as "node" in the
+			      ;; loop below.
+			      ;;
+			      ;; For example:
+			      ;;
+			      ;; Element Type:
+			      ;; <xs:complexType name="A">
+			      ;;  <xs:sequence>
+			      ;;   <xs:element name="B" type="t:BType"/>
+			      ;;   <xs:choice>
+			      ;;    <xs:element name="C" type="xs:string"/>
+			      ;;    <xs:element name="D" type="t:DType"/>
+			      ;;   </xs:choice>
+			      ;;  </xs:sequence>
+			      ;; </xs:complexType>
+			      ;;
+			      ;; Node:
+			      ;; <t:A>
+			      ;;   <t:B tag="b"/>
+			      ;;   <t:C>1</C>
+			      ;; </t:A>
+			      ;;
+			      ;; soap-decode-type will be called below with:
+			      ;;
+			      ;; element =
+			      ;;   <xs:choice>
+			      ;;     <xs:element name="C" type="xs:string"/>
+			      ;;     <xs:element name="D" type="t:DType"/>
+			      ;;   </xs:choice>
+			      ;; node =
+			      ;;   <t:A>
+			      ;;     <t:B tag="b"/>
+			      ;;     <t:C>1</C>
+			      ;;   </t:A>
+			      (list node)))
+		  (element-type (soap-xs-element-type element)))
+	     (dolist (node children)
+	       (cl-incf instance-count)
+	       (let* ((attributes
+		       (soap-decode-xs-attributes element-type node))
+		      ;; Attributes may specify xsi:type override.
+		      (element-type
+		       (if (soap-xml-get-attribute-or-nil1 node 'xsi:type)
+			   (soap-wsdl-get
+			    (soap-l2fq
+			     (soap-xml-get-attribute-or-nil1 node
+							     'xsi:type))
+			    soap-current-wsdl 'soap-xs-type-p t)
+			 element-type))
+		      (decoded-child (soap-decode-type element-type node)))
+		 (if e-name
+		     (push (cons (intern e-name)
+				 (append attributes decoded-child)) result)
+		   ;; When e-name is nil we don't want to introduce an extra
+		   ;; level of nesting, so we splice the decoding into
+		   ;; result.
+		   (setq result (append decoded-child result)))))
+	     (cond ((and (eq (soap-xs-complex-type-indicator type) 'choice)
+			 ;; Choices can allow multiple values.
+			 (not (soap-xs-complex-type-multiple-p type))
+			 (> instance-count 0))
+		    ;; This was a choice node, and we decoded one value.
+		    (throw 'done t))
 
-                   ;; Do some sanity checking
-                   ((and (not (eq (soap-xs-complex-type-indicator type)
-                                  'choice))
-                         (= instance-count 0)
-                         (not (soap-xs-element-optional? element))
-                         (and (soap-xs-complex-type-p element-type)
-                              (not (soap-xs-complex-type-optional-p
-                                    element-type))))
-                    (soap-warning "missing non-nillable slot %s" e-name))
-                   ((and (> instance-count 1)
-                         (not (soap-xs-complex-type-multiple-p type))
-                         (not (soap-xs-element-multiple? element))
-                         (and (soap-xs-complex-type-p element-type)
-                              (not (soap-xs-complex-type-multiple-p
-                                    element-type))))
-                    (soap-warning "expected single %s slot, found multiple"
-                                  e-name))))))
+		   ;; Do some sanity checking
+		   ((and (not (eq (soap-xs-complex-type-indicator type)
+				  'choice))
+			 (= instance-count 0)
+			 (not (soap-xs-element-optional? element))
+			 (and (soap-xs-complex-type-p element-type)
+			      (not (soap-xs-complex-type-optional-p
+				    element-type))))
+		    (soap-warning "missing non-nillable slot %s" e-name))
+		   ((and (> instance-count 1)
+			 (not (soap-xs-complex-type-multiple-p type))
+			 (not (soap-xs-element-multiple? element))
+			 (and (soap-xs-complex-type-p element-type)
+			      (not (soap-xs-complex-type-multiple-p
+				    element-type))))
+		    (soap-warning "expected single %s slot, found multiple"
+				  e-name))))))
        (nreverse result)))
     (t
      (error "Don't know how to decode complex type: %s"
-            (soap-xs-complex-type-indicator type)))))
+	    (soap-xs-complex-type-indicator type)))))
 
 ;; Register methods for `soap-xs-complex-type'
 (let ((tag (aref (make-soap-xs-complex-type) 0)))
@@ -1939,11 +1938,11 @@ This is a specialization of `soap-decode-type' for
 ;;;;; WSDL document elements
 
 
-(defstruct (soap-message (:include soap-element))
+(cl-defstruct (soap-message (:include soap-element))
   parts                                 ; ALIST of NAME => WSDL-TYPE name
   )
 
-(defstruct (soap-operation (:include soap-element))
+(cl-defstruct (soap-operation (:include soap-element))
   parameter-order
   input                                 ; (NAME . MESSAGE)
   output                                ; (NAME . MESSAGE)
@@ -1951,13 +1950,13 @@ This is a specialization of `soap-decode-type' for
   input-action                          ; WS-addressing action string
   output-action)                        ; WS-addressing action string
 
-(defstruct (soap-port-type (:include soap-element))
+(cl-defstruct (soap-port-type (:include soap-element))
   operations)                           ; a namespace of operations
 
 ;; A bound operation is an operation which has a soap action and a use
 ;; method attached -- these are attached as part of a binding and we
 ;; can have different bindings for the same operations.
-(defstruct soap-bound-operation
+(cl-defstruct soap-bound-operation
   operation                             ; SOAP-OPERATION
   soap-action                           ; value for SOAPAction HTTP header
   soap-headers                          ; list of (message part use)
@@ -1966,11 +1965,11 @@ This is a specialization of `soap-decode-type' for
                                         ; http://www.w3.org/TR/wsdl#_soap:body
   )
 
-(defstruct (soap-binding (:include soap-element))
+(cl-defstruct (soap-binding (:include soap-element))
   port-type
   (operations (make-hash-table :test 'equal) :readonly t))
 
-(defstruct (soap-port (:include soap-element))
+(cl-defstruct (soap-port (:include soap-element))
   service-url
   binding)
 
@@ -1978,10 +1977,10 @@ This is a specialization of `soap-decode-type' for
 ;;;;; The WSDL document
 
 ;; The WSDL data structure used for encoding/decoding SOAP messages
-(defstruct (soap-wsdl
-            ;; NOTE: don't call this constructor, see `soap-make-wsdl'
-            (:constructor soap-make-wsdl^)
-            (:copier soap-copy-wsdl))
+(cl-defstruct (soap-wsdl
+	       ;; NOTE: don't call this constructor, see `soap-make-wsdl'
+	       (:constructor soap-make-wsdl^)
+	       (:copier soap-copy-wsdl))
   origin                         ; file or URL from which this wsdl was loaded
   current-file                   ; most-recently fetched file or URL
   xmlschema-imports              ; a list of schema imports
@@ -2107,34 +2106,34 @@ used to resolve the namespace alias."
   "Parse a schema NODE, placing the results in WSDL.
 Return a SOAP-NAMESPACE containing the elements."
   (soap-with-local-xmlns node
-    (assert (eq (soap-l2wk (xml-node-name node)) 'xsd:schema)
-            nil
-            "expecting an xsd:schema node, got %s"
-            (soap-l2wk (xml-node-name node)))
+    (cl-assert (eq (soap-l2wk (xml-node-name node)) 'xsd:schema)
+	       nil
+	       "expecting an xsd:schema node, got %s"
+	       (soap-l2wk (xml-node-name node)))
 
     (let ((ns (make-soap-namespace :name (soap-get-target-namespace node))))
 
       (dolist (def (xml-node-children node))
-        (unless (stringp def)           ; skip text nodes
-          (case (soap-l2wk (xml-node-name def))
-            (xsd:import
-             ;; Imports will be processed later
-             ;; NOTE: we should expand the location now!
-             (let ((location (or
-                              (xml-get-attribute-or-nil def 'schemaLocation)
-                              (xml-get-attribute-or-nil def 'location))))
-               (when location
-                 (push location (soap-wsdl-xmlschema-imports wsdl)))))
-            (xsd:element
-             (soap-namespace-put (soap-xs-parse-element def) ns))
-            (xsd:attribute
-             (soap-namespace-put (soap-xs-parse-attribute def) ns))
-            (xsd:attributeGroup
-             (soap-namespace-put (soap-xs-parse-attribute-group def) ns))
-            (xsd:simpleType
-             (soap-namespace-put (soap-xs-parse-simple-type def) ns))
-            ((xsd:complexType xsd:group)
-             (soap-namespace-put (soap-xs-parse-complex-type def) ns)))))
+	(unless (stringp def)           ; skip text nodes
+	  (cl-case (soap-l2wk (xml-node-name def))
+	    (xsd:import
+	     ;; Imports will be processed later
+	     ;; NOTE: we should expand the location now!
+	     (let ((location (or
+			      (xml-get-attribute-or-nil def 'schemaLocation)
+			      (xml-get-attribute-or-nil def 'location))))
+	       (when location
+		 (push location (soap-wsdl-xmlschema-imports wsdl)))))
+	    (xsd:element
+	     (soap-namespace-put (soap-xs-parse-element def) ns))
+	    (xsd:attribute
+	     (soap-namespace-put (soap-xs-parse-attribute def) ns))
+	    (xsd:attributeGroup
+	     (soap-namespace-put (soap-xs-parse-attribute-group def) ns))
+	    (xsd:simpleType
+	     (soap-namespace-put (soap-xs-parse-simple-type def) ns))
+	    ((xsd:complexType xsd:group)
+	     (soap-namespace-put (soap-xs-parse-complex-type def) ns)))))
       ns)))
 
 ;;;;; Resolving references for wsdl types
@@ -2195,7 +2194,7 @@ See also `soap-resolve-references' and
           (message (cdr input)))
       ;; Name this part if it was not named
       (when (or (null name) (equal name ""))
-        (setq name (format "in%d" (incf counter))))
+        (setq name (format "in%d" (cl-incf counter))))
       (when (soap-name-p message)
         (setf (soap-operation-input operation)
               (cons (intern name)
@@ -2206,7 +2205,7 @@ See also `soap-resolve-references' and
     (let ((name (car output))
           (message (cdr output)))
       (when (or (null name) (equal name ""))
-        (setq name (format "out%d" (incf counter))))
+        (setq name (format "out%d" (cl-incf counter))))
       (when (soap-name-p message)
         (setf (soap-operation-output operation)
               (cons (intern name)
@@ -2218,7 +2217,7 @@ See also `soap-resolve-references' and
       (let ((name (car fault))
             (message (cdr fault)))
         (when (or (null name) (equal name ""))
-          (setq name (format "fault%d" (incf counter))))
+          (setq name (format "fault%d" (cl-incf counter))))
         (if (soap-name-p message)
             (push (cons (intern name)
                         (soap-wsdl-get message wsdl 'soap-message-p))
@@ -2304,19 +2303,19 @@ traverse an element tree."
           ;; If this namespace does not have an alias, create one for it.
           (catch 'done
             (while t
-              (setq nstag (format "ns%d" (incf nstag-id)))
+              (setq nstag (format "ns%d" (cl-incf nstag-id)))
               (unless (assoc nstag alias-table)
                 (soap-wsdl-add-alias nstag (soap-namespace-name ns) wsdl)
                 (throw 'done t)))))
 
         (maphash (lambda (_name element)
                    (cond ((soap-element-p element) ; skip links
-                          (incf nprocessed)
+                          (cl-incf nprocessed)
                           (soap-resolve-references element wsdl))
                          ((listp element)
                           (dolist (e element)
                             (when (soap-element-p e)
-                              (incf nprocessed)
+                              (cl-incf nprocessed)
                               (soap-resolve-references e wsdl))))))
                  (soap-namespace-elements ns)))))
   wsdl)
@@ -2391,17 +2390,17 @@ Build on WSDL if it is provided."
   "Assert that NODE is valid."
   (soap-with-local-xmlns node
     (let ((node-name (soap-l2wk (xml-node-name node))))
-      (assert (eq node-name 'wsdl:definitions)
-              nil
-              "expecting wsdl:definitions node, got %s" node-name))))
+      (cl-assert (eq node-name 'wsdl:definitions)
+		 nil
+		 "expecting wsdl:definitions node, got %s" node-name))))
 
 (defun soap-parse-wsdl-phase-fetch-imports (node wsdl)
   "Fetch and load files imported by NODE into WSDL."
   (soap-with-local-xmlns node
     (dolist (node (soap-xml-get-children1 node 'wsdl:import))
       (let ((location (xml-get-attribute-or-nil node 'location)))
-        (when location
-          (soap-load-wsdl location wsdl))))))
+	(when location
+	  (soap-load-wsdl location wsdl))))))
 
 (defun soap-parse-wsdl-phase-parse-schema (node wsdl)
   "Load types found in NODE into WSDL."
@@ -2410,52 +2409,52 @@ Build on WSDL if it is provided."
     ;; build our type-library.
     (let ((types (car (soap-xml-get-children1 node 'wsdl:types))))
       (dolist (node (xml-node-children types))
-        ;; We cannot use (xml-get-children node (soap-wk2l 'xsd:schema)) because
-        ;; each node can install its own alias type so the schema nodes might
-        ;; have a different prefix.
-        (when (consp node)
-          (soap-with-local-xmlns
-              node
-            (when (eq (soap-l2wk (xml-node-name node)) 'xsd:schema)
-              (soap-wsdl-add-namespace (soap-parse-schema node wsdl)
-                                       wsdl))))))))
+	;; We cannot use (xml-get-children node (soap-wk2l 'xsd:schema)) because
+	;; each node can install its own alias type so the schema nodes might
+	;; have a different prefix.
+	(when (consp node)
+	  (soap-with-local-xmlns
+	      node
+	    (when (eq (soap-l2wk (xml-node-name node)) 'xsd:schema)
+	      (soap-wsdl-add-namespace (soap-parse-schema node wsdl)
+				       wsdl))))))))
 
 (defun soap-parse-wsdl-phase-fetch-schema (node wsdl)
   "Fetch and load schema imports defined by NODE into WSDL."
   (soap-with-local-xmlns node
     (while (soap-wsdl-xmlschema-imports wsdl)
       (let* ((import (pop (soap-wsdl-xmlschema-imports wsdl)))
-             (xml (soap-fetch-xml import wsdl)))
-        (soap-wsdl-add-namespace (soap-parse-schema xml wsdl) wsdl)))))
+	     (xml (soap-fetch-xml import wsdl)))
+	(soap-wsdl-add-namespace (soap-parse-schema xml wsdl) wsdl)))))
 
 (defun soap-parse-wsdl-phase-finish-parsing (node wsdl)
   "Finish parsing NODE into WSDL."
   (soap-with-local-xmlns node
     (let ((ns (make-soap-namespace :name (soap-get-target-namespace node))))
       (dolist (node (soap-xml-get-children1 node 'wsdl:message))
-        (soap-namespace-put (soap-parse-message node) ns))
+	(soap-namespace-put (soap-parse-message node) ns))
 
       (dolist (node (soap-xml-get-children1 node 'wsdl:portType))
-        (let ((port-type (soap-parse-port-type node)))
-          (soap-namespace-put port-type ns)
-          (soap-wsdl-add-namespace
-           (soap-port-type-operations port-type) wsdl)))
+	(let ((port-type (soap-parse-port-type node)))
+	  (soap-namespace-put port-type ns)
+	  (soap-wsdl-add-namespace
+	   (soap-port-type-operations port-type) wsdl)))
 
       (dolist (node (soap-xml-get-children1 node 'wsdl:binding))
-        (soap-namespace-put (soap-parse-binding node) ns))
+	(soap-namespace-put (soap-parse-binding node) ns))
 
       (dolist (node (soap-xml-get-children1 node 'wsdl:service))
-        (dolist (node (soap-xml-get-children1 node 'wsdl:port))
-          (let ((name (xml-get-attribute node 'name))
-                (binding (xml-get-attribute node 'binding))
-                (url (let ((n (car (soap-xml-get-children1
-                                    node 'wsdlsoap:address))))
-                       (xml-get-attribute n 'location))))
-            (let ((port (make-soap-port
-                         :name name :binding (soap-l2fq binding 'tns)
-                         :service-url url)))
-              (soap-namespace-put port ns)
-              (push port (soap-wsdl-ports wsdl))))))
+	(dolist (node (soap-xml-get-children1 node 'wsdl:port))
+	  (let ((name (xml-get-attribute node 'name))
+		(binding (xml-get-attribute node 'binding))
+		(url (let ((n (car (soap-xml-get-children1
+				    node 'wsdlsoap:address))))
+		       (xml-get-attribute n 'location))))
+	    (let ((port (make-soap-port
+			 :name name :binding (soap-l2fq binding 'tns)
+			 :service-url url)))
+	      (soap-namespace-put port ns)
+	      (push port (soap-wsdl-ports wsdl))))))
 
       (soap-wsdl-add-namespace ns wsdl))))
 
@@ -2473,10 +2472,10 @@ Build on WSDL if it is provided."
 
 (defun soap-parse-message (node)
   "Parse NODE as a wsdl:message and return the corresponding type."
-  (assert (eq (soap-l2wk (xml-node-name node)) 'wsdl:message)
-          nil
-          "expecting wsdl:message node, got %s"
-          (soap-l2wk (xml-node-name node)))
+  (cl-assert (eq (soap-l2wk (xml-node-name node)) 'wsdl:message)
+	     nil
+	     "expecting wsdl:message node, got %s"
+	     (soap-l2wk (xml-node-name node)))
   (let ((name (xml-get-attribute-or-nil node 'name))
         parts)
     (dolist (p (soap-xml-get-children1 node 'wsdl:part))
@@ -2500,10 +2499,10 @@ Build on WSDL if it is provided."
 
 (defun soap-parse-port-type (node)
   "Parse NODE as a wsdl:portType and return the corresponding port."
-  (assert (eq (soap-l2wk (xml-node-name node)) 'wsdl:portType)
-          nil
-          "expecting wsdl:portType node got %s"
-          (soap-l2wk (xml-node-name node)))
+  (cl-assert (eq (soap-l2wk (xml-node-name node)) 'wsdl:portType)
+	     nil
+	     "expecting wsdl:portType node got %s"
+	     (soap-l2wk (xml-node-name node)))
   (let* ((soap-target-xmlns (concat "urn:" (xml-get-attribute node 'name)))
          (ns (make-soap-namespace :name soap-target-xmlns)))
     (dolist (node (soap-xml-get-children1 node 'wsdl:operation))
@@ -2522,15 +2521,15 @@ Build on WSDL if it is provided."
 
               ;; link all messages from this namespace, as this namespace
               ;; will be used for decoding the response.
-              (destructuring-bind (name . message) (soap-operation-input o)
-                (soap-namespace-put-link name message ns))
+              (cl-destructuring-bind (name . message) (soap-operation-input o)
+		(soap-namespace-put-link name message ns))
 
-              (destructuring-bind (name . message) (soap-operation-output o)
-                (soap-namespace-put-link name message ns))
+              (cl-destructuring-bind (name . message) (soap-operation-output o)
+		(soap-namespace-put-link name message ns))
 
               (dolist (fault (soap-operation-faults o))
-                (destructuring-bind (name . message) fault
-                  (soap-namespace-put-link name message ns)))
+                (cl-destructuring-bind (name . message) fault
+		  (soap-namespace-put-link name message ns)))
 
               )))))
 
@@ -2539,10 +2538,10 @@ Build on WSDL if it is provided."
 
 (defun soap-parse-operation (node)
   "Parse NODE as a wsdl:operation and return the corresponding type."
-  (assert (eq (soap-l2wk (xml-node-name node)) 'wsdl:operation)
-          nil
-          "expecting wsdl:operation node, got %s"
-          (soap-l2wk (xml-node-name node)))
+  (cl-assert (eq (soap-l2wk (xml-node-name node)) 'wsdl:operation)
+	     nil
+	     "expecting wsdl:operation node, got %s"
+	     (soap-l2wk (xml-node-name node)))
   (let ((name (xml-get-attribute node 'name))
         (parameter-order (split-string
                           (xml-get-attribute node 'parameterOrder)))
@@ -2579,10 +2578,10 @@ Build on WSDL if it is provided."
 
 (defun soap-parse-binding (node)
   "Parse NODE as a wsdl:binding and return the corresponding type."
-  (assert (eq (soap-l2wk (xml-node-name node)) 'wsdl:binding)
-          nil
-          "expecting wsdl:binding node, got %s"
-          (soap-l2wk (xml-node-name node)))
+  (cl-assert (eq (soap-l2wk (xml-node-name node)) 'wsdl:binding)
+	     nil
+	     "expecting wsdl:binding node, got %s"
+	     (soap-l2wk (xml-node-name node)))
   (let ((name (xml-get-attribute node 'name))
         (type (xml-get-attribute node 'type)))
     (let ((binding (make-soap-binding :name name
@@ -2679,23 +2678,23 @@ decode function to perform the actual decoding."
                (error "Cannot find href %s" href))))
           (t
            (soap-with-local-xmlns node
-             (if (equal (soap-xml-get-attribute-or-nil1 node 'xsi:nil) "true")
-                 nil
-               ;; Handle union types.
-               (cond ((listp type)
-                      (catch 'done
-                        (dolist (union-member type)
-                          (let* ((decoder (get (aref union-member 0)
-                                               'soap-decoder))
-                                 (result (ignore-errors
-                                           (funcall decoder
-                                                    union-member node))))
-                            (when result (throw 'done result))))))
-                     (t
-                      (let ((decoder (get (aref type 0) 'soap-decoder)))
-                        (assert decoder nil
-                                "no soap-decoder for %s type" (aref type 0))
-                        (funcall decoder type node))))))))))
+	     (if (equal (soap-xml-get-attribute-or-nil1 node 'xsi:nil) "true")
+		 nil
+	       ;; Handle union types.
+	       (cond ((listp type)
+		      (catch 'done
+			(dolist (union-member type)
+			  (let* ((decoder (get (aref union-member 0)
+					       'soap-decoder))
+				 (result (ignore-errors
+					   (funcall decoder
+						    union-member node))))
+			    (when result (throw 'done result))))))
+		     (t
+		      (let ((decoder (get (aref type 0) 'soap-decoder)))
+			(cl-assert decoder nil
+				   "no soap-decoder for %s type" (aref type 0))
+			(funcall decoder type node))))))))))
 
 (defun soap-decode-any-type (node)
   "Decode NODE using type information inside it."
@@ -2769,37 +2768,37 @@ decode function to perform the actual decoding."
 OPERATION is the WSDL operation for which we expect the response,
 WSDL is used to decode the NODE"
   (soap-with-local-xmlns node
-    (assert (eq (soap-l2wk (xml-node-name node)) 'soap:Envelope)
-            nil
-            "expecting soap:Envelope node, got %s"
-            (soap-l2wk (xml-node-name node)))
+    (cl-assert (eq (soap-l2wk (xml-node-name node)) 'soap:Envelope)
+	       nil
+	       "expecting soap:Envelope node, got %s"
+	       (soap-l2wk (xml-node-name node)))
     (let ((headers (soap-xml-get-children1 node 'soap:Header))
-          (body (car (soap-xml-get-children1 node 'soap:Body))))
+	  (body (car (soap-xml-get-children1 node 'soap:Body))))
 
       (let ((fault (car (soap-xml-get-children1 body 'soap:Fault))))
-        (when fault
-          (let ((fault-code (let ((n (car (xml-get-children
-                                           fault 'faultcode))))
-                              (car-safe (xml-node-children n))))
-                (fault-string (let ((n (car (xml-get-children
-                                             fault 'faultstring))))
-                                (car-safe (xml-node-children n))))
-                (detail (xml-get-children fault 'detail)))
-            (while t
-              (signal 'soap-error (list fault-code fault-string detail))))))
+	(when fault
+	  (let ((fault-code (let ((n (car (xml-get-children
+					   fault 'faultcode))))
+			      (car-safe (xml-node-children n))))
+		(fault-string (let ((n (car (xml-get-children
+					     fault 'faultstring))))
+				(car-safe (xml-node-children n))))
+		(detail (xml-get-children fault 'detail)))
+	    (while t
+	      (signal 'soap-error (list fault-code fault-string detail))))))
 
       ;; First (non string) element of the body is the root node of he
       ;; response
       (let ((response (if (eq (soap-bound-operation-use operation) 'literal)
-                          ;; For 'literal uses, the response is the actual body
-                          body
-                        ;; ...otherwise the first non string element
-                        ;; of the body is the response
-                        (catch 'found
-                          (dolist (n (xml-node-children body))
-                            (when (consp n)
-                              (throw 'found n)))))))
-        (soap-parse-response response operation wsdl headers body)))))
+			  ;; For 'literal uses, the response is the actual body
+			  body
+			;; ...otherwise the first non string element
+			;; of the body is the response
+			(catch 'found
+			  (dolist (n (xml-node-children body))
+			    (when (consp n)
+			      (throw 'found n)))))))
+	(soap-parse-response response operation wsdl headers body)))))
 
 (defun soap-parse-response (response-node operation wsdl soap-headers soap-body)
   "Parse RESPONSE-NODE and return the result as a LISP value.
@@ -2820,54 +2819,54 @@ reference multiRef parts which are external to RESPONSE-NODE."
     (soap-with-local-xmlns response-node
 
       (when (eq use 'encoded)
-        (let* ((received-message-name (soap-l2fq (xml-node-name response-node)))
-               (received-message (soap-wsdl-get
-                                  received-message-name wsdl 'soap-message-p)))
-          (unless (eq received-message message)
-            (error "Unexpected message: got %s, expecting %s"
-                   received-message-name
-                   (soap-element-name message)))))
+	(let* ((received-message-name (soap-l2fq (xml-node-name response-node)))
+	       (received-message (soap-wsdl-get
+				  received-message-name wsdl 'soap-message-p)))
+	  (unless (eq received-message message)
+	    (error "Unexpected message: got %s, expecting %s"
+		   received-message-name
+		   (soap-element-name message)))))
 
       (let ((decoded-parts nil)
-            (soap-multi-refs (xml-get-children soap-body 'multiRef))
-            (soap-decoded-multi-refs nil))
+	    (soap-multi-refs (xml-get-children soap-body 'multiRef))
+	    (soap-decoded-multi-refs nil))
 
-        (dolist (part (soap-message-parts message))
-          (let ((tag (car part))
-                (type (cdr part))
-                node)
+	(dolist (part (soap-message-parts message))
+	  (let ((tag (car part))
+		(type (cdr part))
+		node)
 
-            (setq node
-                  (cond
-                   ((eq use 'encoded)
-                    (car (xml-get-children response-node tag)))
+	    (setq node
+		  (cond
+		   ((eq use 'encoded)
+		    (car (xml-get-children response-node tag)))
 
-                   ((eq use 'literal)
-                    (catch 'found
-                      (let* ((ns-aliases (soap-wsdl-alias-table wsdl))
-                             (ns-name (cdr (assoc
-                                            (soap-element-namespace-tag type)
-                                            ns-aliases)))
-                             (fqname (cons ns-name (soap-element-name type))))
-                        (dolist (c (append (mapcar (lambda (header)
-                                                     (car (xml-node-children
-                                                           header)))
-                                                   soap-headers)
-                                           (xml-node-children response-node)))
-                          (when (consp c)
-                            (soap-with-local-xmlns c
-                              (when (equal (soap-l2fq (xml-node-name c))
-                                           fqname)
-                                (throw 'found c))))))))))
+		   ((eq use 'literal)
+		    (catch 'found
+		      (let* ((ns-aliases (soap-wsdl-alias-table wsdl))
+			     (ns-name (cdr (assoc
+					    (soap-element-namespace-tag type)
+					    ns-aliases)))
+			     (fqname (cons ns-name (soap-element-name type))))
+			(dolist (c (append (mapcar (lambda (header)
+						     (car (xml-node-children
+							   header)))
+						   soap-headers)
+					   (xml-node-children response-node)))
+			  (when (consp c)
+			    (soap-with-local-xmlns c
+			      (when (equal (soap-l2fq (xml-node-name c))
+					   fqname)
+				(throw 'found c))))))))))
 
-            (unless node
-              (error "Soap-parse-response(%s): cannot find message part %s"
-                     (soap-element-name op) tag))
-            (let ((decoded-value (soap-decode-type type node)))
-              (when decoded-value
-                (push decoded-value decoded-parts)))))
+	    (unless node
+	      (error "Soap-parse-response(%s): cannot find message part %s"
+		     (soap-element-name op) tag))
+	    (let ((decoded-value (soap-decode-type type node)))
+	      (when decoded-value
+		(push decoded-value decoded-parts)))))
 
-        decoded-parts))))
+	decoded-parts))))
 
 ;;;; SOAP type encoding
 
@@ -2879,8 +2878,8 @@ for the type and calls that specialized function to do the work.
 Attributes are inserted in the current buffer at the current
 position."
   (let ((attribute-encoder (get (aref type 0) 'soap-attribute-encoder)))
-    (assert attribute-encoder nil
-            "no soap-attribute-encoder for %s type" (aref type 0))
+    (cl-assert attribute-encoder nil
+	       "no soap-attribute-encoder for %s type" (aref type 0))
     (funcall attribute-encoder value type)))
 
 (defun soap-encode-value (value type)
@@ -2893,7 +2892,7 @@ is to be encoded.  This is a generic function which finds an
 encoder function based on TYPE and calls that encoder to do the
 work."
   (let ((encoder (get (aref type 0) 'soap-encoder)))
-    (assert encoder nil "no soap-encoder for %s type" (aref type 0))
+    (cl-assert encoder nil "no soap-encoder for %s type" (aref type 0))
     (funcall encoder value type))
   (when (soap-element-namespace-tag type)
     (add-to-list 'soap-encoded-namespaces (soap-element-namespace-tag type))))
@@ -2909,9 +2908,9 @@ being used."
          (use (soap-bound-operation-use operation))
          (message (cdr (soap-operation-input op)))
          (parameter-order (soap-operation-parameter-order op))
-         (param-table (loop for formal in parameter-order
-                            for value in parameters
-                            collect (cons formal value))))
+         (param-table (cl-loop for formal in parameter-order
+			       for value in parameters
+			       collect (cons formal value))))
 
     (unless (= (length parameter-order) (length parameters))
       (error "Wrong number of parameters for %s: expected %d, got %s"
@@ -3059,41 +3058,41 @@ OPERATION-NAME and PARAMETERS are as described in `soap-invoke'."
            (lambda (status)
              (let ((data-buffer (current-buffer)))
                (unwind-protect
-                    (let ((error-status (plist-get status :error)))
-                      (if error-status
-                          (signal (car error-status) (cdr error-status))
-                          (apply callback
-                                 (soap-parse-envelope
-                                  (soap-parse-server-response)
-                                  operation wsdl)
-                                 cbargs)))
+		   (let ((error-status (plist-get status :error)))
+		     (if error-status
+			 (signal (car error-status) (cdr error-status))
+		       (apply callback
+			      (soap-parse-envelope
+			       (soap-parse-server-response)
+			       operation wsdl)
+			      cbargs)))
                  ;; Ensure the url-retrieve buffer is not leaked.
                  (and (buffer-live-p data-buffer)
                       (kill-buffer data-buffer))))))
-          (let ((buffer (url-retrieve-synchronously
-                         (soap-port-service-url port))))
-            (condition-case err
-                (with-current-buffer buffer
-                  (declare (special url-http-response-status))
-                  (if (null url-http-response-status)
-                      (error "No HTTP response from server"))
-                  (if (and soap-debug (> url-http-response-status 299))
-                      ;; This is a warning because some SOAP errors come
-                      ;; back with a HTTP response 500 (internal server
-                      ;; error)
-                      (warn "Error in SOAP response: HTTP code %s"
-                            url-http-response-status))
-                  (soap-parse-envelope (soap-parse-server-response)
-                                       operation wsdl))
-              (soap-error
-               ;; Propagate soap-errors -- they are error replies of the
-               ;; SOAP protocol and don't indicate a communication
-               ;; problem or a bug in this code.
-               (signal (car err) (cdr err)))
-              (error
-               (when soap-debug
-                 (pop-to-buffer buffer))
-               (error (error-message-string err)))))))))
+	(let ((buffer (url-retrieve-synchronously
+		       (soap-port-service-url port))))
+	  (condition-case err
+	      (with-current-buffer buffer
+		(declare (special url-http-response-status))
+		(if (null url-http-response-status)
+		    (error "No HTTP response from server"))
+		(if (and soap-debug (> url-http-response-status 299))
+		    ;; This is a warning because some SOAP errors come
+		    ;; back with a HTTP response 500 (internal server
+		    ;; error)
+		    (warn "Error in SOAP response: HTTP code %s"
+			  url-http-response-status))
+		(soap-parse-envelope (soap-parse-server-response)
+				     operation wsdl))
+	    (soap-error
+	     ;; Propagate soap-errors -- they are error replies of the
+	     ;; SOAP protocol and don't indicate a communication
+	     ;; problem or a bug in this code.
+	     (signal (car err) (cdr err)))
+	    (error
+	     (when soap-debug
+	       (pop-to-buffer buffer))
+	     (error (error-message-string err)))))))))
 
 (defun soap-invoke (wsdl service operation-name &rest parameters)
   "Invoke a SOAP operation and return the result.
