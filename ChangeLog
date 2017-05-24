@@ -1,5 +1,9 @@
 2017-05-24  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
 
+	* soap-client.el: Bump version to 3.1.2.
+
+2017-05-24  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
 	* soap-client.el (url-http-response-status): Add defvar.
 	(soap-fetch-xml-from-url): Remove special declaration of
 	url-http-response-status.
