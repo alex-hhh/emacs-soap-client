@@ -895,10 +895,9 @@ This is a specialization of `soap-encode-value' for
                              (setf (soap-xs-element-type^ new-element)
                                    (soap-xs-complex-type-base type))
                              (cl-loop for i below (length value)
-				      do (progn
-					   (soap-encode-xs-element (aref value i) new-element)
-					   )))
-			 (soap-encode-value value type))
+                                      do (soap-encode-xs-element
+                                          (aref value i) new-element)))
+                         (soap-encode-value value type))
                        (insert "</" fq-name ">\n"))
               ;; else
               (insert "/>\n"))))
@@ -1162,8 +1161,9 @@ See also `soap-wsdl-resolve-references'."
 (defun soap-xs-add-union (node type)
   "Add union members defined in XML NODE to TYPE, an `soap-xs-simple-type'."
   (cl-assert (eq (soap-l2wk (xml-node-name node)) 'xsd:union)
-	     nil
-	     "expecting xsd:union node, got %s" (soap-l2wk (xml-node-name node)))
+             nil
+             "expecting xsd:union node, got %s"
+             (soap-l2wk (xml-node-name node)))
 
   (setf (soap-xs-simple-type-base type)
         (mapcar 'soap-l2fq

@@ -1,5 +1,10 @@
 2017-05-24  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
 
+	* soap-client.el (soap-encode-xs-element): Remove progn.
+	(soap-xs-add-union): Wrap long line.
+
+2017-05-24  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
 	* soap-client.el, soap-inspect.el: Merge emacs.git whitespace
 	changes to eliminate tabs.
 
