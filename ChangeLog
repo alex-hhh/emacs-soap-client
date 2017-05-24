@@ -1,3 +1,8 @@
+2017-05-24  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
+	* soap-client.el, soap-inspect.el: Merge emacs.git whitespace
+	changes to eliminate tabs.
+
 2017-05-24  Alex Harsanyi  <AlexHarsanyi@gmail.com>
 
 	* soap-inspect.el: replaced cl library with cl-lib, case replaced
