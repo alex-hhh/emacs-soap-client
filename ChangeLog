@@ -1,5 +1,12 @@
 2017-05-24  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
 
+	* soap-client.el (url-http-response-status): Add defvar.
+	(soap-fetch-xml-from-url): Remove special declaration of
+	url-http-response-status.
+	(soap-invoke-internal): Likewise.
+
+2017-05-24  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
+
 	* soap-client.el: Require cl-lib version 0.6.1.
 
 2017-05-24  Thomas Fitzsimmons  <fitzsim@fitzsim.org>
