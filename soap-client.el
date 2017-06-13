@@ -1,4 +1,4 @@
-b;;; soap-client.el --- Access SOAP web services       -*- lexical-binding: t -*-
+;;; soap-client.el --- Access SOAP web services       -*- lexical-binding: t -*-
 
 ;; Copyright (C) 2009-2017 Free Software Foundation, Inc.
 
